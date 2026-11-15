@@ -29,6 +29,17 @@ public final class PhotoServer {
     public static final int PORT = 8080;
     private static boolean started;
 
+    /** 4-digit code shown on the TV; the phone page needs it before it can see or change photos. */
+    public static String pin(Context c) {
+        android.content.SharedPreferences sp = c.getSharedPreferences("photos", Context.MODE_PRIVATE);
+        String p = sp.getString("pin", null);
+        if (p == null) {
+            p = String.format(Locale.US, "%04d", new java.security.SecureRandom().nextInt(10000));
+            sp.edit().putString("pin", p).apply();
+        }
+        return p;
+    }
+
     public static File dir(Context c) {
         File d = new File(c.getFilesDir(), "photos");
         d.mkdirs();
@@ -88,6 +99,8 @@ public final class PhotoServer {
             int q = path.indexOf('?');
             if (q >= 0) { query = path.substring(q + 1); path = path.substring(0, q); }
             OutputStream out = new BufferedOutputStream(sock.getOutputStream());
+            boolean page = path.equals("/") || path.equals("/index.html");
+            if (!page && !pin(c).equals(param(query, "pin"))) { send(out, 403, "text/plain", "pin".getBytes()); return; }
 
             if (method.equals("POST") && path.equals("/upload")) {
                 if (length <= 0 || length > 15_000_000) { send(out, 413, "text/plain", "too big".getBytes()); return; }
@@ -149,19 +162,23 @@ public final class PhotoServer {
             + "#g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}"
             + ".c{position:relative}.c img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}"
             + ".c button{position:absolute;top:6px;left:6px;border:0;border-radius:50%;width:32px;height:32px;background:#000a;color:#fff;font-size:16px}"
-            + "</style></head><body><h1>صور البيت 📷</h1><p>الصور اللي تضيفها هنا بتظهر على التليفزيون، وبتفضل محفوظة عليه هو بس.</p>"
+            + "</style></head><body><h1>صور البيت 📷</h1><p>آخر صورتين بتضيفهم بيظهروا ثابتين على التليفزيون في دواير. والصور بتفضل محفوظة على التليفزيون بس.</p>"
             + "<label>➕ ضيف صور<input id=f type=file accept='image/*' multiple></label><div id=st></div><div id=g></div><script>"
             + "const st=document.getElementById('st'),g=document.getElementById('g');"
-            + "async function load(){const l=await (await fetch('/list')).json();g.innerHTML='';"
+            + "let pin=localStorage.getItem('pin')||'';"
+            + "function q(u){return u+(u.includes('?')?'&':'?')+'pin='+pin}"
+            + "async function ask(){pin=prompt('اكتب الرقم السري اللي ظاهر على التليفزيون')||'';localStorage.setItem('pin',pin)}"
+            + "async function load(){let r=await fetch(q('/list'));while(r.status==403){await ask();r=await fetch(q('/list'))}"
+            + "const l=await r.json();g.innerHTML='';"
             + "l.reverse().forEach(n=>{const d=document.createElement('div');d.className='c';"
-            + "d.innerHTML='<img src=\"/photo?name='+n+'\"><button>✕</button>';"
-            + "d.querySelector('button').onclick=async()=>{if(confirm('أمسح الصورة دي؟')){await fetch('/delete?name='+n,{method:'POST'});load()}};g.appendChild(d)});}"
+            + "d.innerHTML='<img src=\"'+q('/photo?name='+n)+'\"><button>✕</button>';"
+            + "d.querySelector('button').onclick=async()=>{if(confirm('أمسح الصورة دي؟')){await fetch(q('/delete?name='+n),{method:'POST'});load()}};g.appendChild(d)});}"
             + "function shrink(file){return new Promise((ok,bad)=>{const i=new Image();i.onload=()=>{const m=1600,s=Math.min(1,m/Math.max(i.width,i.height));"
             + "const c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;c.getContext('2d').drawImage(i,0,0,c.width,c.height);"
             + "c.toBlob(b=>ok(b),'image/jpeg',0.88)};i.onerror=bad;i.src=URL.createObjectURL(file)})}"
             + "document.getElementById('f').onchange=async e=>{const fs=[...e.target.files];let k=0;"
             + "for(const f of fs){st.textContent='بيرفع '+(++k)+' من '+fs.length+'…';"
-            + "try{const b=await shrink(f);await fetch('/upload',{method:'POST',body:b})}catch(x){}}"
+            + "try{const b=await shrink(f);await fetch(q('/upload'),{method:'POST',body:b})}catch(x){}}"
             + "st.textContent='تم ✅';e.target.value='';load()};load();"
             + "</script></body></html>";
 }

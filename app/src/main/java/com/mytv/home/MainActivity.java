@@ -94,11 +94,10 @@ public class MainActivity extends Activity {
     private GridView mushafGrid;
     private BaseAdapter mushafAdapter;
 
-    // photo frame
-    private ImageView photoA, photoB;
-    private TextView photoHint;
-    private FrameLayout photoFrame;
-    private int photoIndex = 0;
+    // family portraits (two fixed circles)
+    private final ImageView[] portraits = new ImageView[2];
+    private TextView photoHint, photoCaption;
+    private String shownPhotos = "";
 
     private int zikrIndex = 0;
     private long bannerUntil = 0;
@@ -281,31 +280,39 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    /** Shows the two most recent family photos, fixed in round gold frames. Re-checks for new uploads. */
     private void showNextPhoto() {
         File[] files = PhotoServer.photos(this);
         String addr = PhotoServer.address();
-        if (files.length == 0) {
-            photoHint.setText("📷 ضيف صور البيت\nمن موبايلك على نفس الواي فاي افتح:\n" + (addr != null ? addr : "…"));
-            photoHint.setVisibility(View.VISIBLE);
-            photoA.setImageDrawable(null);
-            photoB.setImageDrawable(null);
-            return;
+        boolean ready = files.length >= 1;
+        photoHint.setText("📷 لإضافة الصور: من موبايلك على نفس الواي فاي افتح\n"
+                + (addr != null ? addr : "…") + "   •   الرقم السري: " + PhotoServer.pin(this));
+        photoHint.setVisibility(ready ? View.GONE : View.VISIBLE);
+        photoCaption.setVisibility(ready ? View.VISIBLE : View.GONE);
+        String key = "";
+        File[] pick = new File[2];
+        for (int i = 0; i < 2; i++) {
+            int idx = files.length - 2 + i;
+            if (files.length == 1) idx = i == 0 ? 0 : -1;
+            pick[i] = idx >= 0 && idx < files.length ? files[idx] : null;
+            key += pick[i] == null ? "-" : pick[i].getName();
         }
-        photoHint.setVisibility(View.GONE);
-        File f = files[photoIndex++ % files.length];
-        new Thread(() -> {
-            Bitmap bm = decode(f, 900);
-            handler.post(() -> {
-                if (bm == null) return;
-                // new photo under, old fades out on top
-                photoB.setImageBitmap(bm);
-                photoB.setAlpha(1f);
-                photoA.animate().alpha(0f).setDuration(1200).withEndAction(() -> {
-                    photoA.setImageBitmap(bm);
-                    photoA.setAlpha(1f);
-                }).start();
-            });
-        }).start();
+        portraits[1].setVisibility(pick[1] != null || !ready ? View.VISIBLE : View.GONE);
+        if (key.equals(shownPhotos)) return;
+        shownPhotos = key;
+        for (int i = 0; i < 2; i++) {
+            ImageView iv = portraits[i];
+            File f = pick[i];
+            if (f == null) { iv.setImageDrawable(null); continue; }
+            new Thread(() -> {
+                Bitmap bm = decode(f, 500);
+                handler.post(() -> {
+                    iv.setAlpha(0f);
+                    iv.setImageBitmap(bm);
+                    iv.animate().alpha(1f).setDuration(900).start();
+                });
+            }).start();
+        }
     }
 
     private static Bitmap decode(File f, int max) {
@@ -600,30 +607,55 @@ public class MainActivity extends Activity {
     }
 
     private View buildPhotoFrame() {
-        photoFrame = new FrameLayout(this);
-        photoFrame.setPadding(dp(7), dp(7), dp(7), dp(7));
-        photoFrame.setBackground(round(0xF2FFFFFF, 0, 10));
-        photoFrame.setElevation(dp(12));
-        photoFrame.setRotation(-2.5f);
-        FrameLayout inner = new FrameLayout(this);
-        inner.setBackground(round(0xFF2A3A40, 0, 6));
-        inner.setClipToOutline(true);
-        photoB = new ImageView(this);
-        photoA = new ImageView(this);
-        for (ImageView iv : new ImageView[]{photoB, photoA}) {
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(Gravity.CENTER_HORIZONTAL);
+        col.setClipChildren(false);
+
+        FrameLayout pair = new FrameLayout(this);
+        pair.setClipChildren(false);
+        int size = dp(132), overlap = dp(22);
+        for (int i = 0; i < 2; i++) {
+            FrameLayout ring = new FrameLayout(this);
+            GradientDrawable gold = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xFFF6DE8D, 0xFFB8892E});
+            gold.setShape(GradientDrawable.OVAL);
+            ring.setBackground(gold);
+            ring.setPadding(dp(5), dp(5), dp(5), dp(5));
+            ring.setElevation(dp(14 - i * 2));
+            ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            inner.addView(iv, new FrameLayout.LayoutParams(-1, -1));
+            GradientDrawable oval = new GradientDrawable();
+            oval.setShape(GradientDrawable.OVAL);
+            oval.setColor(0xFF2A3A40);
+            iv.setBackground(oval);
+            iv.setClipToOutline(true);
+            ring.addView(iv, new FrameLayout.LayoutParams(-1, -1));
+            portraits[i] = iv;
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size, size, Gravity.TOP | Gravity.LEFT);
+            lp.leftMargin = i * (size - overlap);
+            lp.topMargin = i == 0 ? 0 : dp(26);
+            ring.setRotation(i == 0 ? -4f : 4f);
+            pair.addView(ring, lp);
         }
-        photoHint = text(13, SOFT, false);
-        photoHint.setPadding(dp(12), dp(12), dp(12), dp(12));
-        photoHint.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        inner.addView(photoHint, new FrameLayout.LayoutParams(-1, -1));
-        photoFrame.addView(inner, new FrameLayout.LayoutParams(-1, -1));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(270), dp(190));
-        lp.setMargins(0, dp(20), dp(6), 0);
+        col.addView(pair, new LinearLayout.LayoutParams(size * 2 - overlap, size + dp(26)));
+
+        photoCaption = text(15, 0xFFF3E3B5, true);
+        photoCaption.setText("حفظهما الله 🤍");
+        photoCaption.setShadowLayer(8, 0, 2, 0xAA000000);
+        photoCaption.setPadding(0, dp(8), 0, 0);
+        col.addView(photoCaption);
+
+        photoHint = text(12, SOFT, false);
+        photoHint.setShadowLayer(8, 0, 2, 0xAA000000);
+        photoHint.setPadding(0, dp(8), 0, 0);
+        photoHint.setMaxWidth(dp(300));
+        col.addView(photoHint);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.setMargins(0, dp(18), 0, 0);
         lp.gravity = Gravity.END;
-        photoFrame.setLayoutParams(lp);
-        return photoFrame;
+        col.setLayoutParams(lp);
+        return col;
     }
 
     private View buildBar() {

@@ -81,6 +81,10 @@ public class MainActivity extends Activity {
     private final TextView[] cellTime = new TextView[6];
     private final LinearLayout[] cells = new LinearLayout[6];
     private LinearLayout dock;
+    private Player player;
+    private LinearLayout bar;
+    private TextView barIcon, barTitle, barSub, barTime, barPlay;
+    private android.widget.ProgressBar barProgress;
     private View firstCard;
     private int zikrIndex = 0;
     private long bannerUntil = 0;
@@ -98,6 +102,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        player = Player.get(this);
         setContentView(buildUi());
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
         AdhanReceiver.scheduleNext(this);
@@ -213,6 +218,38 @@ public class MainActivity extends Activity {
             }
         }
         banner.setVisibility(System.currentTimeMillis() < bannerUntil ? View.VISIBLE : View.GONE);
+        updateBar();
+    }
+
+    private void updateBar() {
+        Player.State st = player.state;
+        boolean show = st != Player.State.IDLE;
+        if (bar.getVisibility() != (show ? View.VISIBLE : View.GONE)) bar.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (!show) return;
+        barTitle.setText(player.title);
+        switch (st) {
+            case LOADING: barIcon.setText("⏳"); barSub.setText("جاري التحميل…"); break;
+            case ERROR: barIcon.setText("⚠"); barSub.setText("مش متاح دلوقتي، جرّب تاني"); break;
+            case PAUSED: barIcon.setText("⏸"); barSub.setText(player.subtitle + "  •  متوقف"); break;
+            default: barIcon.setText("🔊"); barSub.setText(player.subtitle);
+        }
+        barPlay.setText(st == Player.State.PLAYING ? "⏸" : "▶");
+        int pos = player.positionMs(), dur = player.durationMs();
+        if (player.live || dur <= 0) {
+            barProgress.setVisibility(View.GONE);
+            barTime.setText(player.live && st == Player.State.PLAYING ? "مباشر" : "");
+        } else {
+            barProgress.setVisibility(View.VISIBLE);
+            barProgress.setMax(dur);
+            barProgress.setProgress(pos);
+            barTime.setText(clockText(pos) + " / " + clockText(dur));
+        }
+    }
+
+    private static String clockText(int ms) {
+        int s = ms / 1000;
+        return s >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)
+                : String.format(Locale.US, "%d:%02d", s / 60, s % 60);
     }
 
     private void setWallpaper(String name) {
@@ -244,6 +281,15 @@ public class MainActivity extends Activity {
         dock.removeAllViews();
         firstCard = addCard(prayerCard(), "مواقيت الصلاة", v -> {
             panel.setVisibility(panel.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+        });
+
+        addQuranCard(2, "البقرة", 0xFF6B4E16, 0xFF2E2108);
+        addQuranCard(18, "الكهف", 0xFF1D4E6B, 0xFF0B2233);
+        addQuranCard(36, "يس", 0xFF5A2D5E, 0xFF261128);
+        addQuranCard(67, "الملك", 0xFF2D5E3E, 0xFF10261A);
+        addQuranCard(55, "الرحمن", 0xFF6B2D2D, 0xFF2B1010);
+        addCard(audioFace("الرقية الشرعية", "بث مباشر", 0xFF14524B, 0xFF082321), "الرقية الشرعية", v -> {
+            player.playRuqya(); updateBar();
         });
 
         PackageManager pm = getPackageManager();
@@ -288,6 +334,26 @@ public class MainActivity extends Activity {
                 try { startActivity(launch); } catch (Exception ignored) { }
             });
         }
+    }
+
+    private void addQuranCard(int n, String name, int c1, int c2) {
+        addCard(audioFace("سورة " + name, Player.RECITER, c1, c2), "سورة " + name, v -> {
+            player.playSurah(n, name); updateBar();
+        });
+    }
+
+    private View audioFace(String title, String sub, int c1, int c2) {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        l.setGravity(Gravity.CENTER);
+        l.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{c1, c2}));
+        TextView t = text(19, 0xFFF3E3B5, true);
+        t.setText(title);
+        TextView st = text(12, SOFT, false);
+        st.setText(sub);
+        l.addView(t);
+        l.addView(st);
+        return l;
     }
 
     private View prayerCard() {
@@ -411,7 +477,12 @@ public class MainActivity extends Activity {
         focusTitle = text(30, WHITE, true);
         focusTitle.setShadowLayer(10, 0, 2, 0xAA000000);
         focusTitle.setPadding(dp(10), 0, dp(10), 0);
-        bottom.addView(focusTitle, startAligned());
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        titleRow.addView(focusTitle, new LinearLayout.LayoutParams(0, -2, 1));
+        focusTitle.setGravity(Gravity.START);
+        titleRow.addView(buildBar());
+        bottom.addView(titleRow, new LinearLayout.LayoutParams(-1, -2));
         HorizontalScrollView scroller = new HorizontalScrollView(this);
         scroller.setHorizontalScrollBarEnabled(false);
         scroller.setClipChildren(false);
@@ -466,6 +537,54 @@ public class MainActivity extends Activity {
         banner.setVisibility(View.GONE);
         overlay.addView(banner, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
         return root;
+    }
+
+    private View buildBar() {
+        bar = new LinearLayout(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(16), dp(8), dp(10), dp(8));
+        bar.setBackground(round(0xCC0B1A22, 0x55E8C35A, 26));
+        bar.setVisibility(View.GONE);
+        barIcon = text(20, GOLD, false);
+        bar.addView(barIcon);
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        info.setPadding(dp(12), 0, dp(12), 0);
+        barTitle = text(16, WHITE, true);
+        barSub = text(12, DIM, false);
+        barTitle.setGravity(Gravity.START);
+        barSub.setGravity(Gravity.START);
+        info.addView(barTitle, startAligned());
+        info.addView(barSub, startAligned());
+        barProgress = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        barProgress.setProgressTintList(android.content.res.ColorStateList.valueOf(GOLD));
+        info.addView(barProgress, new LinearLayout.LayoutParams(dp(220), dp(6)));
+        bar.addView(info);
+        barTime = text(13, SOFT, false);
+        barTime.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+        barTime.setPadding(dp(4), 0, dp(10), 0);
+        bar.addView(barTime);
+        barPlay = barButton("⏸", v -> { player.togglePause(); updateBar(); });
+        bar.addView(barPlay);
+        bar.addView(barButton("✕", v -> { player.stop(); updateBar(); if (firstCard != null) firstCard.requestFocus(); }));
+        return bar;
+    }
+
+    private TextView barButton(String label, View.OnClickListener click) {
+        TextView b = text(18, WHITE, true);
+        b.setText(label);
+        b.setFocusable(true);
+        b.setClickable(true);
+        b.setOnClickListener(click);
+        b.setBackground(round(0x22FFFFFF, 0, 22));
+        b.setOnFocusChangeListener((v, has) -> {
+            v.setBackground(round(has ? 0xEEFFFFFF : 0x22FFFFFF, 0, 22));
+            ((TextView) v).setTextColor(has ? 0xFF10261F : WHITE);
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(44), dp(44));
+        lp.setMargins(dp(4), 0, dp(4), 0);
+        b.setLayoutParams(lp);
+        return b;
     }
 
     private TextView text(float sp, int color, boolean bold) {

@@ -101,6 +101,7 @@ public class MainActivity extends Activity {
     private TextView pinAddr;
     private final TextView[] pinDigits = new TextView[4];
     private int duaIndex = 0;
+    private TextView overlayPill;
     private String shownPhotos = "";
 
     private int zikrIndex = 0;
@@ -139,6 +140,21 @@ public class MainActivity extends Activity {
         handler.post(photoRotator);
         handler.postDelayed(duaRotator, 25000);
         if (firstCard != null) firstCard.requestFocus();
+        overlayPill.setVisibility(Settings.canDrawOverlays(this) ? View.GONE : View.VISIBLE);
+    }
+
+    /** Lets the adhan screen open on top of YouTube / Pablo. Some TVs hide this setting. */
+    private void askOverlay() {
+        try {
+            startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:" + getPackageName())));
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.parse("package:" + getPackageName())));
+            } catch (Exception ignored) { }
+            overlayPill.setText("🔔 التليفزيون ده مش بيسمح بالإعداد ده");
+        }
     }
 
     @Override
@@ -240,8 +256,7 @@ public class MainActivity extends Activity {
             String key = today + "-" + i;
             if (PrayerTimes.IS_PRAYER[i] && t[i] == nowMin && !key.equals(lastAdhanKey)) {
                 lastAdhanKey = key;
-                bannerUntil = System.currentTimeMillis() + 4 * 60_000;
-                banner.setText("🕌 حان الآن موعد أذان " + PrayerTimes.NAMES[i] + " حسب توقيت " + BuildConfig.CITY_NAME);
+                AdhanActivity.launch(this, PrayerTimes.NAMES[i]);
             }
         }
         banner.setVisibility(System.currentTimeMillis() < bannerUntil ? View.VISIBLE : View.GONE);
@@ -638,8 +653,13 @@ public class MainActivity extends Activity {
         photosPill.setOnClickListener(v -> {
             if (pinCard.getVisibility() == View.VISIBLE) pinCard.setVisibility(View.GONE); else showPinCard();
         });
+        overlayPill = pill("🔔  فعّل الأذان فوق التطبيقات");
+        overlayPill.setOnClickListener(v -> askOverlay());
         LinearLayout pills = new LinearLayout(this);
-        pills.addView(photosPill);
+        pills.addView(overlayPill);
+        LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(-2, -2);
+        op.setMarginStart(dp(10));
+        pills.addView(photosPill, op);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, -2);
         sp.setMarginStart(dp(10));
         pills.addView(settings, sp);

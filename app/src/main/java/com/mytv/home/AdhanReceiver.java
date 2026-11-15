@@ -24,7 +24,10 @@ public class AdhanReceiver extends BroadcastReceiver {
     public void onReceive(Context ctx, Intent intent) {
         if (ACTION.equals(intent.getAction())) {
             String name = intent.getStringExtra("name");
-            if (name != null) notifyAdhan(ctx, name);
+            if (name != null) {
+                notifyAdhan(ctx, name);
+                AdhanActivity.launch(ctx, name); // works when the TV lets us show over other apps
+            }
             ctx.sendBroadcast(new Intent(MainActivity.ACTION_ADHAN_NOW).setPackage(ctx.getPackageName()).putExtra("name", name));
         }
         scheduleNext(ctx);
@@ -46,7 +49,13 @@ public class AdhanReceiver extends BroadcastReceiver {
                     PendingIntent pi = PendingIntent.getBroadcast(ctx, 1, i2,
                             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
                     AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
-                    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ms, pi);
+                    try {
+                        PendingIntent show = PendingIntent.getActivity(ctx, 2, new Intent(ctx, MainActivity.class),
+                                PendingIntent.FLAG_IMMUTABLE);
+                        am.setAlarmClock(new AlarmManager.AlarmClockInfo(ms, show), pi); // exact, on the minute
+                    } catch (SecurityException e) {
+                        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ms, pi);
+                    }
                     return;
                 }
             }
@@ -55,13 +64,17 @@ public class AdhanReceiver extends BroadcastReceiver {
 
     private static void notifyAdhan(Context ctx, String name) {
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
-        NotificationChannel ch = new NotificationChannel(CHANNEL, "الأذان", NotificationManager.IMPORTANCE_HIGH);
-        ch.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+        // if the adhan screen can open on top, it plays the adhan itself, so the notification stays silent
+        boolean screen = android.provider.Settings.canDrawOverlays(ctx);
+        String channel = screen ? CHANNEL + "_quiet" : CHANNEL;
+        NotificationChannel ch = new NotificationChannel(channel, "الأذان", NotificationManager.IMPORTANCE_HIGH);
+        if (screen) ch.setSound(null, null);
+        else ch.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
                 new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build());
         nm.createNotificationChannel(ch);
         PendingIntent open = PendingIntent.getActivity(ctx, 0, new Intent(ctx, MainActivity.class),
                 PendingIntent.FLAG_IMMUTABLE);
-        Notification n = new Notification.Builder(ctx, CHANNEL)
+        Notification n = new Notification.Builder(ctx, channel)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle("حان الآن موعد أذان " + name)
                 .setContentText("حسب توقيت " + BuildConfig.CITY_NAME)

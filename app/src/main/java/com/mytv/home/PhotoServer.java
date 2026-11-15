@@ -123,6 +123,24 @@ public final class PhotoServer {
                 String name = new File(URLDecoder.decode(param(query, "name"), "UTF-8")).getName();
                 new File(dir(c), name).delete();
                 send(out, 200, "text/plain", "ok".getBytes());
+            } else if (method.equals("POST") && path.equals("/adhan")) {
+                if (length <= 0 || length > 40_000_000) { send(out, 413, "text/plain", "too big".getBytes()); return; }
+                File tmp = new File(c.getFilesDir(), "adhan.tmp");
+                try (FileOutputStream fo = new FileOutputStream(tmp)) {
+                    byte[] buf = new byte[65536];
+                    int left = length;
+                    while (left > 0) { int r = in.read(buf, 0, Math.min(buf.length, left)); if (r < 0) break; fo.write(buf, 0, r); left -= r; }
+                }
+                tmp.renameTo(AdhanActivity.adhanFile(c));
+                send(out, 200, "text/plain", "ok".getBytes());
+            } else if (method.equals("POST") && path.equals("/adhan-test")) {
+                c.startActivity(new android.content.Intent(c, AdhanActivity.class).putExtra(AdhanActivity.EXTRA_NAME, "المغرب")
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+                send(out, 200, "text/plain", "ok".getBytes());
+            } else if (path.equals("/adhan-status")) {
+                File f = AdhanActivity.adhanFile(c);
+                send(out, 200, "application/json", ("{\"has\":" + (f.exists() && f.length() > 0) + ",\"mb\":"
+                        + String.format(Locale.US, "%.1f", f.length() / 1048576.0) + "}").getBytes());
             } else if (method.equals("POST") && path.equals("/family")) {
                 byte[] body = new byte[Math.min(Math.max(length, 0), 20000)];
                 int got = 0;
@@ -183,8 +201,12 @@ public final class PhotoServer {
             + "#g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}"
             + ".c{position:relative}.c img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}"
             + ".c button{position:absolute;top:6px;left:6px;border:0;border-radius:50%;width:32px;height:32px;background:#000a;color:#fff;font-size:16px}"
-            + "</style></head><body><h1>صور البيت 📷</h1><p>آخر صورتين بتضيفهم بيظهروا ثابتين على التليفزيون في دواير. والصور بتفضل محفوظة على التليفزيون بس.</p>"
+            + "</style></head><body><h1>شاشتي 🏡</h1><p>آخر صورتين بتضيفهم بيظهروا ثابتين على التليفزيون في دواير. والصور بتفضل محفوظة على التليفزيون بس.</p>"
             + "<label>➕ ضيف صور<input id=f type=file accept='image/*' multiple></label><div id=st></div><div id=g></div>"
+            + "<fieldset><legend>🔊 صوت الأذان</legend><small id=as>…</small>"
+            + "<label style='margin:12px 0'>🎵 اختار ملف الأذان<input id=af type=file accept='audio/*,.mp3,.m4a,.aac,.wav'></label>"
+            + "<button id=at style='background:#14524b;color:#fff;border:0;border-radius:12px;padding:12px 22px;font-size:16px'>▶ جرّب الأذان على التليفزيون</button>"
+            + "</fieldset>"
             + "<fieldset><legend>🏡 العيلة</legend><small>الأسامي دي بتظهر على الشاشة في الأدعية، ومحفوظة على التليفزيون بس.</small>"
             + "<input id=dad placeholder='اسم الأب'><input id=mom placeholder='اسم الأم'>"
             + "<input id=kids placeholder='أسامي الأولاد، وبينهم فاصلة: سارة، مريم'>"
@@ -211,6 +233,12 @@ public final class PhotoServer {
             + "sv.onclick=async()=>{const k=kids.value.split(/[,،]/).map(x=>x.trim()).filter(x=>x);"
             + "await fetch(q('/family'),{method:'POST',body:JSON.stringify({dad:dad.value.trim(),mom:mom.value.trim(),kids:k,girls:girls.checked})});"
             + "document.getElementById('fs').textContent='اتحفظ ✅'};"
-            + "load().then(fam);"
+            + "async function ads(){const j=await (await fetch(q('/adhan-status'))).json();"
+            + "document.getElementById('as').textContent=j.has?'متسجّل على التليفزيون ✅ ('+j.mb+' ميجا). تقدر تغيّره من هنا.':'لسه مفيش أذان، والتنبيه شغال بصوت عادي.'}"
+            + "document.getElementById('af').onchange=async e=>{const f=e.target.files[0];if(!f)return;"
+            + "document.getElementById('as').textContent='بيرفع الأذان…';"
+            + "await fetch(q('/adhan'),{method:'POST',body:f});e.target.value='';ads()};"
+            + "document.getElementById('at').onclick=()=>fetch(q('/adhan-test'),{method:'POST'});"
+            + "load().then(fam).then(ads);"
             + "</script></body></html>";
 }

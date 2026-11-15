@@ -1,0 +1,40 @@
+plugins { id 'com.android.application' }
+
+def ks = System.getenv("KEYSTORE_FILE")
+
+android {
+    namespace 'com.mytv.home'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.mytv.home'
+        minSdk 26
+        targetSdk 34
+        versionCode((System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger())
+        versionName "1.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
+        buildConfigField "String", "CITY_NAME", "\"${project.property('city.name')}\""
+        buildConfigField "double", "CITY_LAT", project.property('city.lat')
+        buildConfigField "double", "CITY_LON", project.property('city.lon')
+        buildConfigField "double", "CITY_TZ", project.property('city.tz')
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        release {
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv("KEYSTORE_PASS")
+                keyAlias "mytv"
+                keyPassword System.getenv("KEYSTORE_PASS")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig ks ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

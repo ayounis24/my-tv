@@ -40,6 +40,15 @@ public final class PhotoServer {
         return p;
     }
 
+    /** Family names typed on the phone page, kept only on the TV: {dad, mom, kids[]} */
+    public static org.json.JSONObject family(Context c) {
+        try {
+            return new org.json.JSONObject(c.getSharedPreferences("photos", Context.MODE_PRIVATE).getString("family", "{}"));
+        } catch (Exception e) {
+            return new org.json.JSONObject();
+        }
+    }
+
     public static File dir(Context c) {
         File d = new File(c.getFilesDir(), "photos");
         d.mkdirs();
@@ -114,6 +123,15 @@ public final class PhotoServer {
                 String name = new File(URLDecoder.decode(param(query, "name"), "UTF-8")).getName();
                 new File(dir(c), name).delete();
                 send(out, 200, "text/plain", "ok".getBytes());
+            } else if (method.equals("POST") && path.equals("/family")) {
+                byte[] body = new byte[Math.min(Math.max(length, 0), 20000)];
+                int got = 0;
+                while (got < body.length) { int r = in.read(body, got, body.length - got); if (r < 0) break; got += r; }
+                org.json.JSONObject j = new org.json.JSONObject(new String(body, 0, got, StandardCharsets.UTF_8));
+                c.getSharedPreferences("photos", Context.MODE_PRIVATE).edit().putString("family", j.toString()).apply();
+                send(out, 200, "text/plain", "ok".getBytes());
+            } else if (path.equals("/family")) {
+                send(out, 200, "application/json; charset=utf-8", family(c).toString().getBytes(StandardCharsets.UTF_8));
             } else if (path.equals("/list")) {
                 StringBuilder sb = new StringBuilder("[");
                 for (File f : photos(c)) sb.append(sb.length() > 1 ? "," : "").append('"').append(f.getName()).append('"');
@@ -157,13 +175,22 @@ public final class PhotoServer {
             + "<meta name=viewport content='width=device-width,initial-scale=1'><title>صور شاشتي</title><style>"
             + "body{margin:0;font-family:-apple-system,sans-serif;background:#0f2a2a;color:#f5f1e6;padding:20px}"
             + "h1{font-size:24px;margin:0 0 6px}p{color:#b9c4bc;margin:0 0 18px}"
+            + "fieldset{border:1px solid #e8c35a55;border-radius:14px;margin:22px 0;padding:14px}legend{color:#e8c35a;font-weight:bold;padding:0 6px}"
+            + "fieldset input{display:block;width:100%;box-sizing:border-box;margin:6px 0 12px;padding:12px;border-radius:10px;border:0;font-size:17px}"
+            + "fieldset small{color:#b9c4bc}#sv{background:#e8c35a;color:#10261f;border:0;border-radius:12px;padding:12px 26px;font-size:17px;font-weight:bold}"
             + "label{display:block;background:#e8c35a;color:#10261f;text-align:center;padding:18px;border-radius:14px;font-size:20px;font-weight:bold}"
             + "input{display:none}#st{margin:14px 0;min-height:22px;color:#e8c35a}"
             + "#g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}"
             + ".c{position:relative}.c img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}"
             + ".c button{position:absolute;top:6px;left:6px;border:0;border-radius:50%;width:32px;height:32px;background:#000a;color:#fff;font-size:16px}"
             + "</style></head><body><h1>صور البيت 📷</h1><p>آخر صورتين بتضيفهم بيظهروا ثابتين على التليفزيون في دواير. والصور بتفضل محفوظة على التليفزيون بس.</p>"
-            + "<label>➕ ضيف صور<input id=f type=file accept='image/*' multiple></label><div id=st></div><div id=g></div><script>"
+            + "<label>➕ ضيف صور<input id=f type=file accept='image/*' multiple></label><div id=st></div><div id=g></div>"
+            + "<fieldset><legend>🏡 العيلة</legend><small>الأسامي دي بتظهر على الشاشة في الأدعية، ومحفوظة على التليفزيون بس.</small>"
+            + "<input id=dad placeholder='اسم الأب'><input id=mom placeholder='اسم الأم'>"
+            + "<input id=kids placeholder='أسامي الأولاد، وبينهم فاصلة: سارة، مريم'>"
+            + "<label style='background:none;color:#f5f1e6;text-align:start;padding:0 0 12px;font-size:16px;font-weight:normal'>"
+            + "<input id=girls type=checkbox style='display:inline;width:auto;margin:0 0 0 8px'>كلهم بنات</label>"
+            + "<button id=sv>حفظ</button> <span id=fs></span></fieldset><script>"
             + "const st=document.getElementById('st'),g=document.getElementById('g');"
             + "let pin=localStorage.getItem('pin')||'';"
             + "function q(u){return u+(u.includes('?')?'&':'?')+'pin='+pin}"
@@ -179,6 +206,11 @@ public final class PhotoServer {
             + "document.getElementById('f').onchange=async e=>{const fs=[...e.target.files];let k=0;"
             + "for(const f of fs){st.textContent='بيرفع '+(++k)+' من '+fs.length+'…';"
             + "try{const b=await shrink(f);await fetch(q('/upload'),{method:'POST',body:b})}catch(x){}}"
-            + "st.textContent='تم ✅';e.target.value='';load()};load();"
+            + "st.textContent='تم ✅';e.target.value='';load()};"
+            + "async function fam(){const j=await (await fetch(q('/family'))).json();dad.value=j.dad||'';mom.value=j.mom||'';kids.value=(j.kids||[]).join('، ');girls.checked=!!j.girls}"
+            + "sv.onclick=async()=>{const k=kids.value.split(/[,،]/).map(x=>x.trim()).filter(x=>x);"
+            + "await fetch(q('/family'),{method:'POST',body:JSON.stringify({dad:dad.value.trim(),mom:mom.value.trim(),kids:k,girls:girls.checked})});"
+            + "document.getElementById('fs').textContent='اتحفظ ✅'};"
+            + "load().then(fam);"
             + "</script></body></html>";
 }

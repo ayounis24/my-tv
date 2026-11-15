@@ -96,7 +96,11 @@ public class MainActivity extends Activity {
 
     // family portraits (two fixed circles)
     private final ImageView[] portraits = new ImageView[2];
-    private TextView photoHint, photoCaption;
+    private TextView photoHint, famTitle, famKids, famDua;
+    private LinearLayout famCard, pinCard;
+    private TextView pinAddr;
+    private final TextView[] pinDigits = new TextView[4];
+    private int duaIndex = 0;
     private String shownPhotos = "";
 
     private int zikrIndex = 0;
@@ -133,6 +137,7 @@ public class MainActivity extends Activity {
         handler.post(zikrRotator);
         handler.post(weatherUpdater);
         handler.post(photoRotator);
+        handler.postDelayed(duaRotator, 25000);
         if (firstCard != null) firstCard.requestFocus();
     }
 
@@ -145,6 +150,10 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && pinCard.getVisibility() == View.VISIBLE) {
+            pinCard.setVisibility(View.GONE);
+            return true;
+        }
         if (keyCode == KeyEvent.KEYCODE_BACK && mushaf.getVisibility() == View.VISIBLE) {
             mushaf.setVisibility(View.GONE);
             if (firstCard != null) firstCard.requestFocus();
@@ -285,10 +294,9 @@ public class MainActivity extends Activity {
         File[] files = PhotoServer.photos(this);
         String addr = PhotoServer.address();
         boolean ready = files.length >= 1;
-        photoHint.setText("📷 لإضافة الصور: من موبايلك على نفس الواي فاي افتح\n"
-                + (addr != null ? addr : "…") + "   •   الرقم السري: " + PhotoServer.pin(this));
+        photoHint.setText("اضغط «📷 صور البيت» فوق عشان تضيف صوركم");
         photoHint.setVisibility(ready ? View.GONE : View.VISIBLE);
-        photoCaption.setVisibility(ready ? View.VISIBLE : View.GONE);
+        refreshFamily();
         String key = "";
         File[] pick = new File[2];
         for (int i = 0; i < 2; i++) {
@@ -314,6 +322,76 @@ public class MainActivity extends Activity {
             }).start();
         }
     }
+
+    private String[] familyDuas = new String[0];
+
+    /** Family names (typed on the phone page) -> title, kids line and personal duas. */
+    private void refreshFamily() {
+        org.json.JSONObject j = PhotoServer.family(this);
+        String dad = j.optString("dad").trim(), mom = j.optString("mom").trim();
+        org.json.JSONArray ka = j.optJSONArray("kids");
+        java.util.List<String> kids = new java.util.ArrayList<>();
+        if (ka != null) for (int i = 0; i < ka.length(); i++) if (!ka.optString(i).trim().isEmpty()) kids.add(ka.optString(i).trim());
+        boolean girls = j.optBoolean("girls");
+        if (dad.isEmpty() && mom.isEmpty() && kids.isEmpty()) { famCard.setVisibility(View.GONE); return; }
+        famCard.setVisibility(View.VISIBLE);
+
+        String parents = dad.isEmpty() ? mom : mom.isEmpty() ? dad : dad + " و" + mom;
+        famTitle.setText("🏡 بيت " + parents);
+        famKids.setText(kids.isEmpty() ? "" : String.join("  •  ", kids) + "  🤍");
+        famKids.setVisibility(kids.isEmpty() ? View.GONE : View.VISIBLE);
+
+        String kidsAnd = joinAnd(kids);
+        String them = girls ? "هن" : "هم";
+        java.util.List<String> d = new java.util.ArrayList<>();
+        if (!kids.isEmpty()) {
+            d.add("اللهم احفظ " + parents + " و" + (girls ? "بناتهم " : "ذريتهم ") + kidsAnd + "، واجعل بيتهم عامرًا بذكرك");
+            d.add("اللهم اجعل " + kidsAnd + " قرة عين لوالدي" + them + "، وأنبت" + them + " نباتًا حسنًا، وبارك في" + them);
+        } else {
+            d.add("اللهم احفظ " + parents + "، واجعل بيتهم عامرًا بذكرك");
+        }
+        if (!dad.isEmpty() && !mom.isEmpty())
+            d.add("اللهم بارك لـ" + dad + " و" + mom + " في بعضهما، واجمع بينهما في خير");
+        d.add("﴿رَبَّنَا هَبْ لَنَا مِنْ أَزْوَاجِنَا وَذُرِّيَّاتِنَا قُرَّةَ أَعْيُنٍ وَاجْعَلْنَا لِلْمُتَّقِينَ إِمَامًا﴾");
+        d.add("﴿رَبِّ اجْعَلْنِي مُقِيمَ الصَّلَاةِ وَمِن ذُرِّيَّتِي رَبَّنَا وَتَقَبَّلْ دُعَاءِ﴾");
+        d.add("اللهم اجعل هذا البيت سكنًا ومودة ورحمة، واجمعنا في الفردوس الأعلى");
+        String[] nd = d.toArray(new String[0]);
+        if (!java.util.Arrays.equals(nd, familyDuas)) { familyDuas = nd; duaIndex = 0; famDua.setText(nd[0]); }
+    }
+
+    private static String joinAnd(java.util.List<String> names) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < names.size(); i++) sb.append(i == 0 ? "" : " و").append(names.get(i));
+        return sb.toString();
+    }
+
+    private final Runnable duaRotator = new Runnable() {
+        @Override public void run() {
+            if (familyDuas.length > 0) {
+                duaIndex = (duaIndex + 1) % familyDuas.length;
+                famDua.animate().alpha(0f).setDuration(500).withEndAction(() -> {
+                    famDua.setText(familyDuas[duaIndex]);
+                    famDua.animate().alpha(1f).setDuration(700).start();
+                }).start();
+            }
+            handler.postDelayed(this, 25000);
+        }
+    };
+
+    private void showPinCard() {
+        String addr = PhotoServer.address();
+        pinAddr.setText(addr != null ? addr : "التليفزيون مش متوصل بالواي فاي");
+        String pin = PhotoServer.pin(this);
+        for (int i = 0; i < 4; i++) pinDigits[i].setText(String.valueOf(pin.charAt(i)));
+        pinCard.setVisibility(View.VISIBLE);
+        pinCard.setAlpha(0f);
+        pinCard.setTranslationY(-dp(10));
+        pinCard.animate().alpha(1f).translationY(0).setDuration(250).start();
+        handler.removeCallbacks(hidePin);
+        handler.postDelayed(hidePin, 60_000);
+    }
+
+    private final Runnable hidePin = () -> pinCard.setVisibility(View.GONE);
 
     private static Bitmap decode(File f, int max) {
         BitmapFactory.Options o = new BitmapFactory.Options();
@@ -556,8 +634,21 @@ public class MainActivity extends Activity {
             try { startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
             catch (Exception ignored) { }
         });
-        leftCol.addView(settings, endAligned());
-        leftCol.addView(buildPhotoFrame());
+        TextView photosPill = pill("📷  صور البيت");
+        photosPill.setOnClickListener(v -> {
+            if (pinCard.getVisibility() == View.VISIBLE) pinCard.setVisibility(View.GONE); else showPinCard();
+        });
+        LinearLayout pills = new LinearLayout(this);
+        pills.addView(photosPill);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, -2);
+        sp.setMarginStart(dp(10));
+        pills.addView(settings, sp);
+        leftCol.addView(pills, endAligned());
+        FrameLayout under = new FrameLayout(this);
+        under.setClipChildren(false);
+        under.addView(buildPhotoFrame());
+        under.addView(buildPinCard(), new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
+        leftCol.addView(under, endAligned());
         FrameLayout.LayoutParams llp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
         llp.setMargins(dp(44), dp(28), dp(44), 0);
         overlay.addView(leftCol, llp);
@@ -614,7 +705,7 @@ public class MainActivity extends Activity {
 
         FrameLayout pair = new FrameLayout(this);
         pair.setClipChildren(false);
-        int size = dp(132), overlap = dp(22);
+        int size = dp(112), overlap = dp(18);
         for (int i = 0; i < 2; i++) {
             FrameLayout ring = new FrameLayout(this);
             GradientDrawable gold = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xFFF6DE8D, 0xFFB8892E});
@@ -633,17 +724,30 @@ public class MainActivity extends Activity {
             portraits[i] = iv;
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size, size, Gravity.TOP | Gravity.LEFT);
             lp.leftMargin = i * (size - overlap);
-            lp.topMargin = i == 0 ? 0 : dp(26);
+            lp.topMargin = i == 0 ? 0 : dp(20);
             ring.setRotation(i == 0 ? -4f : 4f);
             pair.addView(ring, lp);
         }
-        col.addView(pair, new LinearLayout.LayoutParams(size * 2 - overlap, size + dp(26)));
+        col.addView(pair, new LinearLayout.LayoutParams(size * 2 - overlap, size + dp(20)));
 
-        photoCaption = text(15, 0xFFF3E3B5, true);
-        photoCaption.setText("حفظهما الله 🤍");
-        photoCaption.setShadowLayer(8, 0, 2, 0xAA000000);
-        photoCaption.setPadding(0, dp(8), 0, 0);
-        col.addView(photoCaption);
+        famCard = new LinearLayout(this);
+        famCard.setOrientation(LinearLayout.VERTICAL);
+        famCard.setGravity(Gravity.CENTER_HORIZONTAL);
+        famCard.setPadding(dp(16), dp(10), dp(16), dp(12));
+        famCard.setBackground(round(0x990B1A22, 0x44E8C35A, 16));
+        famCard.setVisibility(View.GONE);
+        famTitle = text(16, GOLD, true);
+        famKids = text(13, 0xFFF3E3B5, false);
+        famKids.setPadding(0, dp(2), 0, dp(6));
+        famDua = text(13, WHITE, false);
+        famDua.setMaxLines(2);
+        famDua.setLineSpacing(0, 1.15f);
+        famCard.addView(famTitle);
+        famCard.addView(famKids);
+        famCard.addView(famDua);
+        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(dp(300), -2);
+        fl.setMargins(0, dp(10), 0, 0);
+        col.addView(famCard, fl);
 
         photoHint = text(12, SOFT, false);
         photoHint.setShadowLayer(8, 0, 2, 0xAA000000);
@@ -651,11 +755,51 @@ public class MainActivity extends Activity {
         photoHint.setMaxWidth(dp(300));
         col.addView(photoHint);
 
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-        lp.setMargins(0, dp(18), 0, 0);
-        lp.gravity = Gravity.END;
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        lp.setMargins(0, dp(14), 0, 0);
         col.setLayoutParams(lp);
         return col;
+    }
+
+    /** Hidden until "📷 صور البيت" is pressed: the address to open on the phone and the 4-digit code. */
+    private View buildPinCard() {
+        pinCard = new LinearLayout(this);
+        pinCard.setOrientation(LinearLayout.VERTICAL);
+        pinCard.setGravity(Gravity.CENTER_HORIZONTAL);
+        pinCard.setPadding(dp(20), dp(14), dp(20), dp(16));
+        pinCard.setBackground(round(0xF20B1A22, 0x88E8C35A, 18));
+        pinCard.setElevation(dp(20));
+        pinCard.setVisibility(View.GONE);
+        TextView t = text(15, GOLD, true);
+        t.setText("📷 ضيف صوركم وأسامي العيلة");
+        pinCard.addView(t);
+        TextView s1 = text(12, DIM, false);
+        s1.setText("من موبايلك، على نفس الواي فاي، افتح:");
+        s1.setPadding(0, dp(8), 0, dp(2));
+        pinCard.addView(s1);
+        pinAddr = text(17, WHITE, true);
+        pinAddr.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+        pinCard.addView(pinAddr);
+        TextView s2 = text(12, DIM, false);
+        s2.setText("واكتب الرقم السري");
+        s2.setPadding(0, dp(10), 0, dp(6));
+        pinCard.addView(s2);
+        LinearLayout digits = new LinearLayout(this);
+        digits.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+        for (int i = 0; i < 4; i++) {
+            TextView d = text(24, 0xFF10261F, true);
+            d.setBackground(round(GOLD, 0, 10));
+            LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(dp(40), dp(48));
+            dl.setMargins(dp(4), 0, dp(4), 0);
+            digits.addView(d, dl);
+            pinDigits[i] = d;
+        }
+        pinCard.addView(digits);
+        TextView s3 = text(11, DIM, false);
+        s3.setText("بيختفي لوحده بعد دقيقة  •  رجوع للإغلاق");
+        s3.setPadding(0, dp(10), 0, 0);
+        pinCard.addView(s3);
+        return pinCard;
     }
 
     private View buildBar() {

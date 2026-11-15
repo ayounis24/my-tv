@@ -135,11 +135,11 @@ public class AdhanActivity extends Activity {
         root.setBackgroundColor(0xFF06120F);
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
 
-        int[] photos = mosquePhotos();
+        int[] photos = mosquePhotos(name);
         if (photos.length > 0) {
             ImageView bg = new ImageView(this);
             bg.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            bg.setImageResource(photos[(int) (System.currentTimeMillis() / 60000 % photos.length)]);
+            bg.setImageResource(photos[Calendar.getInstance().get(Calendar.DAY_OF_YEAR) % photos.length]); // a different one each day
             root.addView(bg, new FrameLayout.LayoutParams(-1, -1));
             bg.setScaleX(1.08f); bg.setScaleY(1.08f);
             bg.animate().scaleX(1f).scaleY(1f).setDuration(60_000).start(); // slow gentle zoom
@@ -188,10 +188,19 @@ public class AdhanActivity extends Activity {
         return root;
     }
 
-    private int[] mosquePhotos() {
+    /** Each prayer has photos that match its time: blue dawn, bright noon, warm afternoon, sunset, night lights. */
+    private int[] mosquePhotos(String name) {
+        String key;
+        switch (name) {
+            case "الفجر": key = "fajr"; break;
+            case "الظهر": key = "dhuhr"; break;
+            case "العصر": key = "asr"; break;
+            case "المغرب": key = "maghrib"; break;
+            default: key = "isha";
+        }
         java.util.List<Integer> ids = new java.util.ArrayList<>();
-        for (int i = 1; i <= 20; i++) {
-            int id = getResources().getIdentifier("mosque_" + i, "drawable", getPackageName());
+        for (int i = 1; i <= 9; i++) {
+            int id = getResources().getIdentifier("adhan_" + key + "_" + i, "drawable", getPackageName());
             if (id != 0) ids.add(id);
         }
         int[] out = new int[ids.size()];

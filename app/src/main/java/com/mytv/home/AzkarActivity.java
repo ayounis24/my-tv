@@ -36,6 +36,9 @@ public class AzkarActivity extends Activity {
 
     private boolean morning;
     private List<Azkar.Zikr> list;
+    /** Alafasy mode: one continuous recording, the screen follows its timeline. */
+    private AzkarAfasy.Cue[] cues;
+    private int cueIndex = -1;
     private int index = -1, count = 0;
     private boolean firstPass, manual, finished;
 
@@ -75,8 +78,95 @@ public class AzkarActivity extends Activity {
         audio = (AudioManager) getSystemService(AUDIO_SERVICE);
         Player p = Player.get(this);
         if (p.state == Player.State.PLAYING) p.togglePause();
+        cues = morning ? AzkarAfasy.MORNING : AzkarAfasy.EVENING;
         setContentView(buildUi());
-        go(0);
+        if (cues.length > 0) startTimeline(); else go(0);
+    }
+
+    // ---------- Alafasy: one recording, screen follows it ----------
+
+    private void startTimeline() {
+        status.setText("🔊  جاري التحميل…");
+        progress.setMax(cues.length);
+        try {
+            mp = new MediaPlayer();
+            mp.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
+            mp.setDataSource(morning ? AzkarAfasy.MORNING_URL : AzkarAfasy.EVENING_URL);
+            mp.setOnPreparedListener(x -> {
+                focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).build();
+                audio.requestAudioFocus(focus);
+                x.start();
+                pauseBtn.setText("⏸");
+                handler.post(follow);
+            });
+            mp.setOnCompletionListener(x -> finishAll());
+            mp.setOnErrorListener((x, w, e) -> { cues = new AzkarAfasy.Cue[0]; stopAudio(); go(0); return true; }); // fall back to per-zikr audio
+            mp.prepareAsync();
+        } catch (Exception e) {
+            cues = new AzkarAfasy.Cue[0];
+            go(0);
+        }
+        showCue(0);
+        pauseBtn.requestFocus();
+    }
+
+    private final Runnable follow = new Runnable() {
+        @Override public void run() {
+            if (mp == null) return;
+            float t;
+            try { t = mp.getCurrentPosition() / 1000f; } catch (Exception e) { return; }
+            int i = 0;
+            while (i + 1 < cues.length && t >= cues[i + 1].start) i++;
+            if (i != cueIndex) showCue(i);
+            AzkarAfasy.Cue c = cues[i];
+            int n = 0;
+            for (float r : c.reps) if (t >= r) n++;
+            if (n != count) {
+                count = n;
+                updateCueCounter();
+                ring.animate().scaleX(1.06f).scaleY(1.06f).setDuration(80).withEndAction(() ->
+                        ring.animate().scaleX(1f).scaleY(1f).setDuration(120).start()).start();
+            }
+            int max = scroll.getChildAt(0).getHeight() - scroll.getHeight();
+            if (max > 0) {
+                float span = Math.max(1f, (c.reps.length > 1 ? c.reps[1] : c.end) - c.start);
+                scroll.smoothScrollTo(0, (int) (max * Math.min(1f, (t - c.start) / span)));
+            }
+            try { status.setText(mp.isPlaying() ? "🔊  الشيخ مشاري العفاسي" : "⏸  متوقف"); } catch (Exception ignored) { }
+            handler.postDelayed(this, 100);
+        }
+    };
+
+    private void showCue(int i) {
+        cueIndex = i;
+        AzkarAfasy.Cue c = cues[i];
+        count = 0;
+        step.setText((i + 1) + " / " + cues.length);
+        progress.setProgress(i + 1);
+        text.setText(c.text);
+        text.setTextSize(c.text.length() > 380 ? 25 : c.text.length() > 220 ? 28 : 32);
+        scroll.scrollTo(0, 0);
+        boolean showEve = !c.evening.isEmpty();
+        eveNote.setVisibility(showEve ? View.VISIBLE : View.GONE);
+        if (showEve) eveNote.setText("🌙  في المساء قل: " + c.evening);
+        text.setAlpha(0f);
+        text.animate().alpha(1f).setDuration(500).start();
+        updateCueCounter();
+    }
+
+    private void updateCueCounter() {
+        AzkarAfasy.Cue c = cues[cueIndex];
+        num.setText(String.valueOf(count));
+        ofNum.setText(c.repeat == 1 ? "مرة واحدة" : "من " + c.repeat);
+        ring.setProgress(count / (float) c.repeat);
+    }
+
+    private void seekCue(int i) {
+        if (mp == null || cues.length == 0) return;
+        i = Math.max(0, Math.min(cues.length - 1, i));
+        try { mp.seekTo((int) (cues[i].start * 1000)); } catch (Exception ignored) { }
+        showCue(i);
     }
 
     // ---------- flow ----------
@@ -206,7 +296,11 @@ public class AzkarActivity extends Activity {
         if (mp == null) return;
         try {
             if (mp.isPlaying()) { mp.pause(); pauseBtn.setText("▶"); status.setText("⏸  متوقف"); }
-            else { mp.start(); pauseBtn.setText("⏸"); status.setText("🔊  الشيخ بيقرأ"); handler.post(watch); }
+            else {
+                mp.start(); pauseBtn.setText("⏸");
+                if (cues.length > 0) { handler.removeCallbacks(follow); handler.post(follow); }
+                else { status.setText("🔊  الشيخ بيقرأ"); handler.post(watch); }
+            }
         } catch (Exception ignored) { }
     }
 
@@ -223,6 +317,7 @@ public class AzkarActivity extends Activity {
 
     private void stopAudio() {
         handler.removeCallbacks(watch);
+        handler.removeCallbacks(follow);
         if (mp != null) { try { mp.release(); } catch (Exception ignored) { } mp = null; }
         if (focus != null) { audio.abandonAudioFocusRequest(focus); focus = null; }
     }
@@ -235,8 +330,14 @@ public class AzkarActivity extends Activity {
             countByHand();
             return true;
         }
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT || keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) { go(index + 1); return true; }
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS || keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) { go(index - 1); return true; }
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT || keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+            if (cues.length > 0) seekCue(cueIndex + 1); else go(index + 1);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS || keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
+            if (cues.length > 0) seekCue(cueIndex - 1); else go(index - 1);
+            return true;
+        }
         if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) { togglePause(); return true; }
         return super.onKeyDown(keyCode, e);
     }
@@ -338,10 +439,10 @@ public class AzkarActivity extends Activity {
 
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
-        controls.addView(button("⏮  اللي فات", v -> go(index - 1)));
+        controls.addView(button("⏮  اللي فات", v -> { if (cues.length > 0) seekCue(cueIndex - 1); else go(index - 1); }));
         pauseBtn = button("⏸", v -> togglePause());
         controls.addView(pauseBtn);
-        controls.addView(button("اللي بعده  ⏭", v -> go(index + 1)));
+        controls.addView(button("اللي بعده  ⏭", v -> { if (cues.length > 0) seekCue(cueIndex + 1); else go(index + 1); }));
         controls.addView(button("✕  إغلاق", v -> finish()));
         col.addView(controls);
         return root;

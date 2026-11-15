@@ -24,9 +24,9 @@ import java.util.Locale;
 public final class Player {
     public enum State { IDLE, LOADING, PLAYING, PAUSED, ERROR }
 
-    public static final String RECITER = "مشاري العفاسي";
-    private static final String RECITER_MATCH = "العفاسي";
-    private static final String FALLBACK_SERVER = "https://server8.mp3quran.net/afs/";
+    public static final String RECITER = "ماهر المعيقلي";
+    private static final String RECITER_MATCH = "المعيقلي";
+    private static final String FALLBACK_SERVER = "https://server12.mp3quran.net/maher/";
 
     private static Player instance;
     public static Player get(Context ctx) {
@@ -76,6 +76,9 @@ public final class Player {
         key = "";
     }
 
+    public int audioSession() { try { return mp != null ? mp.getAudioSessionId() : 0; } catch (Exception e) { return 0; } }
+    public int surah() { return key.startsWith("surah") ? Integer.parseInt(key.substring(5)) : 0; }
+
     public int positionMs() { try { return mp != null ? mp.getCurrentPosition() : 0; } catch (Exception e) { return 0; } }
     public int durationMs() { try { return mp != null && !live ? mp.getDuration() : 0; } catch (Exception e) { return 0; } }
 
@@ -112,7 +115,11 @@ public final class Player {
                 if (!k.equals(key)) { x.release(); return; }
                 if (requestFocus()) { x.start(); state = State.PLAYING; } else state = State.PAUSED;
             });
-            p.setOnCompletionListener(x -> stop());
+            p.setOnCompletionListener(x -> {
+                // continue with the next surah, like listening to the whole mushaf
+                int n = surah();
+                if (n > 0 && n < 114) { key = ""; playSurah(n + 1, Surahs.NAMES[n]); } else stop();
+            });
             p.setOnErrorListener((x, w, e) -> { state = State.ERROR; return true; });
             mp = p;
             p.prepareAsync();

@@ -8,6 +8,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -19,22 +22,23 @@ import android.provider.Settings;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
-import android.widget.HorizontalScrollView;
+import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import java.io.File;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.chrono.HijrahDate;
 import java.time.temporal.ChronoField;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -45,6 +49,7 @@ public class MainActivity extends Activity {
     private static final int WHITE = 0xFFFFFFFF;
     private static final int SOFT = 0xDDFFFFFF;
     private static final int DIM = 0xAAFFFFFF;
+    private static final int GLASS = 0xB30B1A22;
 
     private static final String[] HIJRI_MONTHS = {"محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى",
             "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"};
@@ -54,38 +59,47 @@ public class MainActivity extends Activity {
     private static final String[] AZKAR = {
             "صلِّ على النبي ﷺ",
             "سبحان الله وبحمده، سبحان الله العظيم",
-            "لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير",
             "أستغفر الله العظيم وأتوب إليه",
             "لا حول ولا قوة إلا بالله",
             "سبحان الله، والحمد لله، ولا إله إلا الله، والله أكبر",
-            "حسبي الله لا إله إلا هو، عليه توكلت وهو رب العرش العظيم",
+            "حسبي الله لا إله إلا هو، عليه توكلت",
             "رضيت بالله ربًا، وبالإسلام دينًا، وبمحمد ﷺ نبيًا",
             "اللهم إنك عفوٌّ تحب العفو فاعفُ عني",
     };
-    /** Apps shown first in the dock, in this order, when installed. */
-    private static final List<String> FAVORITES = Arrays.asList(
-            "com.netflix.ninja", "com.google.android.youtube.tv", "net.mbc.shahidTV", "com.mbc.shahid.androidtv",
-            "com.apple.atve.androidtv.appletv", "com.amazon.amazonvideo.livingroom", "com.disney.disneyplus",
-            "com.osn.go.tv", "com.tod.tv", "com.spotify.tv.android", "com.google.android.youtube.tvmusic");
+    private static final String[] DOCK_PACKAGES = {"com.google.android.youtube.tv"};
+    private static final String[] DOCK_LABEL_MATCH = {"بابلو", "pablo", "bablo"};
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final PrayerTimes prayer = new PrayerTimes(BuildConfig.CITY_LAT, BuildConfig.CITY_LON, BuildConfig.CITY_TZ);
     private Weather weather = new Weather();
+    private Player player;
 
     private ImageView bgFront, bgBack;
     private String currentWallpaper = "";
-    private TextView greeting, clock, ampm, hijriLine, nextLine, gregLine, zikr, banner, focusTitle;
-    private TextView prayerCardNext;
-    private LinearLayout panel;
-    private final TextView[] cellName = new TextView[6];
-    private final TextView[] cellTime = new TextView[6];
-    private final LinearLayout[] cells = new LinearLayout[6];
+    private TextView greeting, clock, ampm, hijriLine, nextLine, gregLine, zikr, banner;
+    private final TextView[] chipName = new TextView[6];
+    private final TextView[] chipTime = new TextView[6];
+    private final LinearLayout[] chips = new LinearLayout[6];
     private LinearLayout dock;
-    private Player player;
-    private LinearLayout bar;
-    private TextView barIcon, barTitle, barSub, barTime, barPlay;
-    private android.widget.ProgressBar barProgress;
     private View firstCard;
+
+    // player bar
+    private LinearLayout bar;
+    private TextView barTitle, barSub, barTime, barPlay;
+    private ProgressBar barProgress;
+    private EqView eq;
+
+    // mushaf list
+    private FrameLayout mushaf;
+    private GridView mushafGrid;
+    private BaseAdapter mushafAdapter;
+
+    // photo frame
+    private ImageView photoA, photoB;
+    private TextView photoHint;
+    private FrameLayout photoFrame;
+    private int photoIndex = 0;
+
     private int zikrIndex = 0;
     private long bannerUntil = 0;
     private String lastAdhanKey = "";
@@ -106,6 +120,7 @@ public class MainActivity extends Activity {
         setContentView(buildUi());
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
         AdhanReceiver.scheduleNext(this);
+        PhotoServer.start(this);
     }
 
     @Override
@@ -118,6 +133,7 @@ public class MainActivity extends Activity {
         handler.post(ticker);
         handler.post(zikrRotator);
         handler.post(weatherUpdater);
+        handler.post(photoRotator);
         if (firstCard != null) firstCard.requestFocus();
     }
 
@@ -130,8 +146,8 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK && panel.getVisibility() == View.VISIBLE) {
-            panel.setVisibility(View.GONE);
+        if (keyCode == KeyEvent.KEYCODE_BACK && mushaf.getVisibility() == View.VISIBLE) {
+            mushaf.setVisibility(View.GONE);
             if (firstCard != null) firstCard.requestFocus();
             return true;
         }
@@ -162,6 +178,12 @@ public class MainActivity extends Activity {
         }
     };
 
+    private final Runnable photoRotator = new Runnable() {
+        @Override public void run() { showNextPhoto(); handler.postDelayed(this, 15000); }
+    };
+
+    // ---------- every second ----------
+
     private void tick() {
         LocalDateTime now = LocalDateTime.now(zone());
         LocalDate today = now.toLocalDate();
@@ -173,10 +195,9 @@ public class MainActivity extends Activity {
         HijrahDate hd = HijrahDate.from(today);
         int hDay = hd.get(ChronoField.DAY_OF_MONTH);
         boolean friday = today.getDayOfWeek() == DayOfWeek.FRIDAY;
-        if (friday) greeting.setText("جمعة مباركة 🌿");
-        else if (hDay >= 13 && hDay <= 15) greeting.setText("الأيام البيض 🤍");
-        else greeting.setText(h < 12 ? "صباح الخير" : "مساء الخير");
-        greeting.setTextColor(friday || (hDay >= 13 && hDay <= 15) ? GOLD : DIM);
+        boolean white = hDay >= 13 && hDay <= 15;
+        greeting.setText(friday ? "جمعة مباركة 🌿" : white ? "الأيام البيض 🤍" : h < 12 ? "صباح الخير" : "مساء الخير");
+        greeting.setTextColor(friday || white ? GOLD : DIM);
 
         String hijri = hDay + " " + HIJRI_MONTHS[hd.get(ChronoField.MONTH_OF_YEAR) - 1] + " " + hd.get(ChronoField.YEAR) + " هـ";
         hijriLine.setText(weather.hasTemp() ? hijri + "   •   " + weather.icon() + " " + weather.tempC + "°" : hijri);
@@ -187,7 +208,7 @@ public class MainActivity extends Activity {
         int nowMin = h * 60 + mi;
         int nextIdx = -1;
         for (int i = 0; i < 6; i++) {
-            cellTime[i].setText(fmt(t[i]));
+            chipTime[i].setText(fmtShort(t[i]));
             if (nextIdx < 0 && t[i] > nowMin) nextIdx = i;
         }
         int remaining;
@@ -195,14 +216,12 @@ public class MainActivity extends Activity {
         else { nextIdx = 0; remaining = prayer.minutesFor(today.plusDays(1))[0] + 24 * 60 - nowMin; }
         for (int i = 0; i < 6; i++) {
             boolean on = i == nextIdx;
-            cells[i].setBackground(round(on ? 0x44E8C35A : 0x22FFFFFF, on ? GOLD : 0, 14));
-            cellName[i].setTextColor(on ? GOLD : SOFT);
+            chips[i].setBackground(round(on ? 0x55E8C35A : GLASS, on ? GOLD : 0, 12));
+            chipName[i].setTextColor(on ? GOLD : SOFT);
         }
-        String left = (remaining >= 60 ? String.format(Locale.US, "%d:%02d", remaining / 60, remaining % 60) : remaining + " دقيقة");
+        String left = remaining >= 60 ? String.format(Locale.US, "%d:%02d", remaining / 60, remaining % 60) : remaining + " دقيقة";
         nextLine.setText("🕌 " + PrayerTimes.NAMES[nextIdx] + " بعد " + left);
-        prayerCardNext.setText(PrayerTimes.NAMES[nextIdx] + " " + fmt(t[nextIdx]));
 
-        // Wallpaper follows the time of day and the weather
         String period;
         if (nowMin >= t[1] && nowMin < t[3]) period = "morning";
         else if (nowMin >= t[3] && nowMin < t[4] + 40) period = "evening";
@@ -224,19 +243,20 @@ public class MainActivity extends Activity {
     private void updateBar() {
         Player.State st = player.state;
         boolean show = st != Player.State.IDLE;
-        if (bar.getVisibility() != (show ? View.VISIBLE : View.GONE)) bar.setVisibility(show ? View.VISIBLE : View.GONE);
+        bar.setVisibility(show ? View.VISIBLE : View.GONE);
+        eq.setActive(st == Player.State.PLAYING);
         if (!show) return;
         barTitle.setText(player.title);
         switch (st) {
-            case LOADING: barIcon.setText("⏳"); barSub.setText("جاري التحميل…"); break;
-            case ERROR: barIcon.setText("⚠"); barSub.setText("مش متاح دلوقتي، جرّب تاني"); break;
-            case PAUSED: barIcon.setText("⏸"); barSub.setText(player.subtitle + "  •  متوقف"); break;
-            default: barIcon.setText("🔊"); barSub.setText(player.subtitle);
+            case LOADING: barSub.setText("جاري التحميل…"); break;
+            case ERROR: barSub.setText("مش متاح دلوقتي، جرّب تاني"); break;
+            case PAUSED: barSub.setText(player.subtitle + "  •  متوقف"); break;
+            default: barSub.setText(player.subtitle);
         }
         barPlay.setText(st == Player.State.PLAYING ? "⏸" : "▶");
         int pos = player.positionMs(), dur = player.durationMs();
         if (player.live || dur <= 0) {
-            barProgress.setVisibility(View.GONE);
+            barProgress.setVisibility(View.INVISIBLE);
             barTime.setText(player.live && st == Player.State.PLAYING ? "مباشر" : "");
         } else {
             barProgress.setVisibility(View.VISIBLE);
@@ -246,12 +266,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private static String clockText(int ms) {
-        int s = ms / 1000;
-        return s >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)
-                : String.format(Locale.US, "%d:%02d", s / 60, s % 60);
-    }
-
     private void setWallpaper(String name) {
         if (name.equals(currentWallpaper)) return;
         int id = getResources().getIdentifier(name, "drawable", getPackageName());
@@ -259,7 +273,6 @@ public class MainActivity extends Activity {
         boolean first = currentWallpaper.isEmpty();
         currentWallpaper = name;
         if (first) { bgFront.setImageResource(id); return; }
-        // new image goes underneath, the old one fades away on top
         bgBack.setImageResource(id);
         bgFront.animate().alpha(0f).setDuration(2000).withEndAction(() -> {
             bgFront.setImageResource(id);
@@ -268,87 +281,112 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private static String fmt(int minutes) {
-        minutes = ((minutes % 1440) + 1440) % 1440;
-        int h = minutes / 60, m = minutes % 60;
-        int h12 = h % 12 == 0 ? 12 : h % 12;
-        return String.format(Locale.US, "%d:%02d %s", h12, m, h < 12 ? "ص" : "م");
+    private void showNextPhoto() {
+        File[] files = PhotoServer.photos(this);
+        String addr = PhotoServer.address();
+        if (files.length == 0) {
+            photoHint.setText("📷 ضيف صور البيت\nمن موبايلك على نفس الواي فاي افتح:\n" + (addr != null ? addr : "…"));
+            photoHint.setVisibility(View.VISIBLE);
+            photoA.setImageDrawable(null);
+            photoB.setImageDrawable(null);
+            return;
+        }
+        photoHint.setVisibility(View.GONE);
+        File f = files[photoIndex++ % files.length];
+        new Thread(() -> {
+            Bitmap bm = decode(f, 900);
+            handler.post(() -> {
+                if (bm == null) return;
+                // new photo under, old fades out on top
+                photoB.setImageBitmap(bm);
+                photoB.setAlpha(1f);
+                photoA.animate().alpha(0f).setDuration(1200).withEndAction(() -> {
+                    photoA.setImageBitmap(bm);
+                    photoA.setAlpha(1f);
+                }).start();
+            });
+        }).start();
     }
 
-    // ---------- Dock ----------
+    private static Bitmap decode(File f, int max) {
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(f.getPath(), o);
+        int s = 1;
+        while (Math.max(o.outWidth, o.outHeight) / (s * 2) >= max) s *= 2;
+        o = new BitmapFactory.Options();
+        o.inSampleSize = s;
+        return BitmapFactory.decodeFile(f.getPath(), o);
+    }
+
+    private static String fmtShort(int minutes) {
+        minutes = ((minutes % 1440) + 1440) % 1440;
+        int h = minutes / 60, m = minutes % 60;
+        return String.format(Locale.US, "%d:%02d", h % 12 == 0 ? 12 : h % 12, m);
+    }
+
+    private static String clockText(int ms) {
+        int s = ms / 1000;
+        return s >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)
+                : String.format(Locale.US, "%d:%02d", s / 60, s % 60);
+    }
+
+    // ---------- dock ----------
 
     private void fillDock() {
         dock.removeAllViews();
-        firstCard = addCard(prayerCard(), "مواقيت الصلاة", v -> {
-            panel.setVisibility(panel.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-        });
-
-        addQuranCard(2, "البقرة", 0xFF6B4E16, 0xFF2E2108);
-        addQuranCard(18, "الكهف", 0xFF1D4E6B, 0xFF0B2233);
-        addQuranCard(36, "يس", 0xFF5A2D5E, 0xFF261128);
-        addQuranCard(67, "الملك", 0xFF2D5E3E, 0xFF10261A);
-        addQuranCard(55, "الرحمن", 0xFF6B2D2D, 0xFF2B1010);
-        addCard(audioFace("الرقية الشرعية", "بث مباشر", 0xFF14524B, 0xFF082321), "الرقية الشرعية", v -> {
-            player.playRuqya(); updateBar();
-        });
+        firstCard = addCard(cardFace("📖", "المصحف", Player.RECITER, 0xFF6B4E16, 0xFF2E2108), v -> openMushaf());
 
         PackageManager pm = getPackageManager();
         List<ResolveInfo> apps = pm.queryIntentActivities(
                 new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0);
-        List<ResolveInfo> sorted = new ArrayList<>();
-        for (ResolveInfo ri : apps) if (!ri.activityInfo.packageName.equals(getPackageName())) sorted.add(ri);
-        Collections.sort(sorted, (a, b) -> {
-            int fa = FAVORITES.indexOf(a.activityInfo.packageName), fb = FAVORITES.indexOf(b.activityInfo.packageName);
-            if (fa < 0) fa = 1000; if (fb < 0) fb = 1000;
-            if (fa != fb) return fa - fb;
-            return a.loadLabel(pm).toString().compareToIgnoreCase(b.loadLabel(pm).toString());
-        });
-        for (ResolveInfo ri : sorted) {
-            String label = ri.loadLabel(pm).toString();
-            Drawable banner = ri.activityInfo.loadBanner(pm);
-            if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
-            View face;
-            if (banner != null) {
-                ImageView iv = new ImageView(this);
-                iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                iv.setImageDrawable(banner);
-                face = iv;
-            } else {
-                LinearLayout l = new LinearLayout(this);
-                l.setOrientation(LinearLayout.VERTICAL);
-                l.setGravity(Gravity.CENTER);
-                l.setBackgroundColor(0xFF263238);
-                ImageView ic = new ImageView(this);
-                ic.setImageDrawable(ri.loadIcon(pm));
-                l.addView(ic, new LinearLayout.LayoutParams(dp(44), dp(44)));
-                TextView tv = text(13, WHITE, false);
-                tv.setText(label);
-                tv.setSingleLine(true);
-                l.addView(tv);
-                face = l;
-            }
-            Intent launch = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
-                    .setClassName(ri.activityInfo.packageName, ri.activityInfo.name)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            addCard(face, label, v -> {
-                try { startActivity(launch); } catch (Exception ignored) { }
-            });
+        for (String pkg : DOCK_PACKAGES)
+            for (ResolveInfo ri : apps) if (ri.activityInfo.packageName.equals(pkg)) addAppCard(pm, ri);
+        for (ResolveInfo ri : apps) {
+            String label = ri.loadLabel(pm).toString().toLowerCase(Locale.ROOT);
+            String pkg = ri.activityInfo.packageName.toLowerCase(Locale.ROOT);
+            for (String m : DOCK_LABEL_MATCH)
+                if (label.contains(m) || pkg.contains(m)) { addAppCard(pm, ri); break; }
         }
     }
 
-    private void addQuranCard(int n, String name, int c1, int c2) {
-        addCard(audioFace("سورة " + name, Player.RECITER, c1, c2), "سورة " + name, v -> {
-            player.playSurah(n, name); updateBar();
-        });
+    private void addAppCard(PackageManager pm, ResolveInfo ri) {
+        String label = ri.loadLabel(pm).toString();
+        Drawable banner = ri.activityInfo.loadBanner(pm);
+        if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
+        View face;
+        if (banner != null) {
+            ImageView iv = new ImageView(this);
+            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            iv.setImageDrawable(banner);
+            face = iv;
+        } else {
+            LinearLayout l = new LinearLayout(this);
+            l.setOrientation(LinearLayout.VERTICAL);
+            l.setGravity(Gravity.CENTER);
+            l.setBackgroundColor(0xFF263238);
+            ImageView ic = new ImageView(this);
+            ic.setImageDrawable(ri.loadIcon(pm));
+            l.addView(ic, new LinearLayout.LayoutParams(dp(44), dp(44)));
+            TextView tv = text(14, WHITE, true);
+            tv.setText(label);
+            tv.setSingleLine(true);
+            l.addView(tv);
+            face = l;
+        }
+        Intent launch = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
+                .setClassName(ri.activityInfo.packageName, ri.activityInfo.name)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        addCard(face, v -> { try { startActivity(launch); } catch (Exception ignored) { } });
     }
 
-    private View audioFace(String title, String sub, int c1, int c2) {
+    private View cardFace(String icon, String title, String sub, int c1, int c2) {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
         l.setGravity(Gravity.CENTER);
         l.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{c1, c2}));
         TextView t = text(19, 0xFFF3E3B5, true);
-        t.setText(title);
+        t.setText(icon + " " + title);
         TextView st = text(12, SOFT, false);
         st.setText(sub);
         l.addView(t);
@@ -356,21 +394,7 @@ public class MainActivity extends Activity {
         return l;
     }
 
-    private View prayerCard() {
-        LinearLayout l = new LinearLayout(this);
-        l.setOrientation(LinearLayout.VERTICAL);
-        l.setGravity(Gravity.CENTER);
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xFF0F4C3A, 0xFF0A2E2A});
-        l.setBackground(g);
-        TextView title = text(17, GOLD, true);
-        title.setText("🕌 مواقيت الصلاة");
-        prayerCardNext = text(13, SOFT, false);
-        l.addView(title);
-        l.addView(prayerCardNext);
-        return l;
-    }
-
-    private View addCard(View face, String title, View.OnClickListener click) {
+    private View addCard(View face, View.OnClickListener click) {
         FrameLayout card = new FrameLayout(this);
         card.setFocusable(true);
         card.setClickable(true);
@@ -383,25 +407,88 @@ public class MainActivity extends Activity {
         ring.setVisibility(View.INVISIBLE);
         card.addView(ring, new FrameLayout.LayoutParams(-1, -1));
         card.setOnFocusChangeListener((v, has) -> {
-            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f).setDuration(150).start();
+            v.animate().scaleX(has ? 1.1f : 1f).scaleY(has ? 1.1f : 1f).setDuration(150).start();
             v.setElevation(has ? dp(10) : 0);
             ring.setVisibility(has ? View.VISIBLE : View.INVISIBLE);
-            if (has) focusTitle.setText(title);
         });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(176), dp(99));
-        lp.setMargins(dp(10), dp(14), dp(10), dp(14));
+        lp.setMargins(dp(10), dp(10), dp(10), dp(10));
         dock.addView(card, lp);
         return card;
     }
 
-    // ---------- Layout ----------
+    // ---------- mushaf ----------
+
+    private void openMushaf() {
+        mushaf.setVisibility(View.VISIBLE);
+        mushafAdapter.notifyDataSetChanged();
+        int cur = player.surah();
+        mushafGrid.setSelection(cur > 0 ? cur : 0);
+        mushafGrid.requestFocus();
+    }
+
+    private View buildMushaf() {
+        mushaf = new FrameLayout(this);
+        mushaf.setBackgroundColor(0x99000000);
+        mushaf.setVisibility(View.GONE);
+        mushaf.setClickable(true);
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(24), dp(18), dp(24), dp(18));
+        box.setBackground(round(0xF00B1A22, 0x66E8C35A, 22));
+        TextView title = text(22, GOLD, true);
+        title.setText("📖 المصحف كامل  •  بصوت الشيخ " + Player.RECITER);
+        title.setPadding(0, 0, 0, dp(4));
+        box.addView(title);
+        TextView hint = text(13, DIM, false);
+        hint.setText("اختار السورة واضغط OK  •  رجوع للإغلاق  •  بعد ما السورة تخلص اللي بعدها بتشتغل لوحدها");
+        hint.setPadding(0, 0, 0, dp(12));
+        box.addView(hint);
+
+        mushafGrid = new GridView(this);
+        mushafGrid.setNumColumns(6);
+        mushafGrid.setHorizontalSpacing(dp(8));
+        mushafGrid.setVerticalSpacing(dp(8));
+        mushafGrid.setSelector(round(0x00000000, GOLD, 12));
+        mushafGrid.setDrawSelectorOnTop(true);
+        mushafAdapter = new BaseAdapter() {
+            @Override public int getCount() { return 115; }
+            @Override public Object getItem(int i) { return i; }
+            @Override public long getItemId(int i) { return i; }
+            @Override public View getView(int i, View conv, ViewGroup parent) {
+                TextView tv = conv instanceof TextView ? (TextView) conv : text(16, WHITE, true);
+                tv.setPadding(dp(6), dp(12), dp(6), dp(12));
+                tv.setSingleLine(true);
+                boolean playing = i == 0 ? "ruqya".equals(player.key) : player.surah() == i;
+                tv.setText(i == 0 ? "🎧 الرقية الشرعية" : i + ". " + Surahs.NAMES[i - 1]);
+                tv.setTextColor(playing ? 0xFF10261F : WHITE);
+                tv.setBackground(round(playing ? GOLD : (i == 0 ? 0x5514524B : 0x22FFFFFF), 0, 12));
+                return tv;
+            }
+        };
+        mushafGrid.setAdapter(mushafAdapter);
+        mushafGrid.setOnItemClickListener((p, v, i, id) -> {
+            if (i == 0) player.playRuqya(); else player.playSurah(i, Surahs.NAMES[i - 1]);
+            mushafAdapter.notifyDataSetChanged();
+            updateBar();
+        });
+        box.addView(mushafGrid, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, -1);
+        lp.setMargins(dp(60), dp(40), dp(60), dp(40));
+        mushaf.addView(box, lp);
+        return mushaf;
+    }
+
+    // ---------- layout ----------
 
     private View buildUi() {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0xFF0A1F2E);
 
-        bgFront = new ImageView(this);
         bgBack = new ImageView(this);
+        bgFront = new ImageView(this);
         for (ImageView iv : new ImageView[]{bgBack, bgFront}) {
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             root.addView(iv, new FrameLayout.LayoutParams(-1, -1));
@@ -409,29 +496,29 @@ public class MainActivity extends Activity {
 
         FrameLayout overlay = new FrameLayout(this);
         overlay.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        overlay.setClipChildren(false);
         root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
 
         View topShade = new View(this);
         topShade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xB0000000, 0x00000000}));
-        overlay.addView(topShade, new FrameLayout.LayoutParams(-1, dp(230), Gravity.TOP));
+        overlay.addView(topShade, new FrameLayout.LayoutParams(-1, dp(240), Gravity.TOP));
         View bottomShade = new View(this);
-        bottomShade.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[]{0xC0000000, 0x00000000}));
-        overlay.addView(bottomShade, new FrameLayout.LayoutParams(-1, dp(260), Gravity.BOTTOM));
+        bottomShade.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[]{0xC8000000, 0x00000000}));
+        overlay.addView(bottomShade, new FrameLayout.LayoutParams(-1, dp(250), Gravity.BOTTOM));
 
-        // Header (top right)
+        // --- top right: time & dates
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(48), dp(30), dp(48), 0);
+        header.setPadding(dp(44), dp(24), dp(44), 0);
         greeting = text(15, DIM, true);
-        greeting.setLetterSpacing(0.05f);
         header.addView(greeting, startAligned());
         LinearLayout clockRow = new LinearLayout(this);
         clockRow.setGravity(Gravity.BOTTOM);
-        clock = text(64, WHITE, false);
+        clock = text(62, WHITE, false);
         clock.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
         clock.setIncludeFontPadding(false);
         ampm = text(20, SOFT, false);
-        ampm.setPadding(dp(8), 0, dp(8), dp(10));
+        ampm.setPadding(dp(8), 0, dp(8), dp(8));
         clockRow.addView(clock);
         clockRow.addView(ampm);
         header.addView(clockRow, startAligned());
@@ -442,95 +529,68 @@ public class MainActivity extends Activity {
         header.addView(nextLine, startAligned());
         gregLine = text(14, DIM, false);
         header.addView(gregLine, startAligned());
-        zikr = text(16, SOFT, false);
-        zikr.setPadding(0, dp(10), 0, 0);
+        zikr = text(15, SOFT, false);
+        zikr.setPadding(0, dp(8), 0, 0);
+        zikr.setMaxWidth(dp(430));
+        zikr.setGravity(Gravity.START);
         header.addView(zikr, startAligned());
-        for (int i = 0; i < header.getChildCount(); i++) {
-            View c = header.getChildAt(i);
-            if (c instanceof TextView) ((TextView) c).setShadowLayer(8, 0, 2, 0xAA000000);
-        }
+        for (int i = 0; i < header.getChildCount(); i++)
+            if (header.getChildAt(i) instanceof TextView) ((TextView) header.getChildAt(i)).setShadowLayer(8, 0, 2, 0xAA000000);
         clock.setShadowLayer(12, 0, 3, 0xAA000000);
         overlay.addView(header, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START));
 
-        // Settings pill (top left)
-        TextView settings = text(14, WHITE, false);
-        settings.setText("⚙  الإعدادات");
-        settings.setPadding(dp(16), dp(8), dp(16), dp(8));
-        settings.setBackground(round(0x33FFFFFF, 0, 20));
-        settings.setFocusable(true);
-        settings.setOnFocusChangeListener((v, has) -> {
-            v.setBackground(round(has ? 0xEEFFFFFF : 0x33FFFFFF, 0, 20));
-            ((TextView) v).setTextColor(has ? 0xFF10261F : WHITE);
-        });
+        // --- top left: settings + family photo frame
+        LinearLayout leftCol = new LinearLayout(this);
+        leftCol.setOrientation(LinearLayout.VERTICAL);
+        leftCol.setGravity(Gravity.END);
+        leftCol.setClipChildren(false);
+        TextView settings = pill("⚙  الإعدادات");
         settings.setOnClickListener(v -> {
             try { startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
             catch (Exception ignored) { }
         });
-        FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
-        slp.setMargins(dp(48), dp(36), dp(48), 0);
-        overlay.addView(settings, slp);
+        leftCol.addView(settings, endAligned());
+        leftCol.addView(buildPhotoFrame());
+        FrameLayout.LayoutParams llp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        llp.setMargins(dp(44), dp(28), dp(44), 0);
+        overlay.addView(leftCol, llp);
 
-        // Dock (bottom)
+        // --- bottom: prayer chips (right) + player bar (left), then the dock
         LinearLayout bottom = new LinearLayout(this);
         bottom.setOrientation(LinearLayout.VERTICAL);
-        bottom.setPadding(dp(38), 0, dp(38), dp(22));
-        focusTitle = text(30, WHITE, true);
-        focusTitle.setShadowLayer(10, 0, 2, 0xAA000000);
-        focusTitle.setPadding(dp(10), 0, dp(10), 0);
-        LinearLayout titleRow = new LinearLayout(this);
-        titleRow.setGravity(Gravity.CENTER_VERTICAL);
-        titleRow.addView(focusTitle, new LinearLayout.LayoutParams(0, -2, 1));
-        focusTitle.setGravity(Gravity.START);
-        titleRow.addView(buildBar());
-        bottom.addView(titleRow, new LinearLayout.LayoutParams(-1, -2));
-        HorizontalScrollView scroller = new HorizontalScrollView(this);
-        scroller.setHorizontalScrollBarEnabled(false);
-        scroller.setClipChildren(false);
-        scroller.setClipToPadding(false);
-        dock = new LinearLayout(this);
-        dock.setClipChildren(false);
-        dock.setPadding(dp(8), 0, dp(8), 0);
-        scroller.addView(dock);
+        bottom.setPadding(dp(34), 0, dp(34), dp(16));
         bottom.setClipChildren(false);
-        bottom.addView(scroller, new LinearLayout.LayoutParams(-1, -2));
-        overlay.setClipChildren(false);
-        overlay.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
 
-        // Prayer times panel (toggled from the first card)
-        panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setGravity(Gravity.CENTER_HORIZONTAL);
-        panel.setPadding(dp(28), dp(20), dp(28), dp(24));
-        panel.setBackground(round(0xD90B1A22, 0x66E8C35A, 22));
-        TextView pt = text(22, GOLD, true);
-        pt.setText("مواقيت الصلاة اليوم  •  " + BuildConfig.CITY_NAME);
-        pt.setPadding(0, 0, 0, dp(14));
-        panel.addView(pt);
-        LinearLayout row = new LinearLayout(this);
+        LinearLayout infoRow = new LinearLayout(this);
+        infoRow.setGravity(Gravity.CENTER_VERTICAL);
+        infoRow.setPadding(dp(10), 0, dp(10), 0);
+        LinearLayout chipRow = new LinearLayout(this);
         for (int i = 0; i < 6; i++) {
             LinearLayout c = new LinearLayout(this);
             c.setOrientation(LinearLayout.VERTICAL);
             c.setGravity(Gravity.CENTER);
-            c.setPadding(dp(18), dp(12), dp(18), dp(12));
-            cellName[i] = text(18, SOFT, true);
-            cellName[i].setText(PrayerTimes.NAMES[i]);
-            cellTime[i] = text(21, WHITE, false);
-            c.addView(cellName[i]);
-            c.addView(cellTime[i]);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-            lp.setMargins(dp(6), 0, dp(6), 0);
-            row.addView(c, lp);
-            cells[i] = c;
+            chipName[i] = text(12, SOFT, true);
+            chipName[i].setText(PrayerTimes.NAMES[i]);
+            chipTime[i] = text(16, WHITE, false);
+            c.addView(chipName[i]);
+            c.addView(chipTime[i]);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(58), dp(50));
+            lp.setMargins(dp(3), 0, dp(3), 0);
+            chipRow.addView(c, lp);
+            chips[i] = c;
         }
-        panel.addView(row);
-        TextView hint = text(13, DIM, false);
-        hint.setText("اضغط رجوع للإغلاق");
-        hint.setPadding(0, dp(12), 0, 0);
-        panel.addView(hint);
-        panel.setVisibility(View.GONE);
-        overlay.addView(panel, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        infoRow.addView(chipRow);
+        infoRow.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+        infoRow.addView(buildBar());
+        bottom.addView(infoRow, new LinearLayout.LayoutParams(-1, dp(58)));
 
-        // Adhan banner
+        dock = new LinearLayout(this);
+        dock.setClipChildren(false);
+        bottom.addView(dock, startAligned());
+        overlay.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+
+        overlay.addView(buildMushaf(), new FrameLayout.LayoutParams(-1, -1));
+
         banner = text(26, 0xFF10261F, true);
         banner.setBackgroundColor(GOLD);
         banner.setPadding(dp(24), dp(16), dp(24), dp(16));
@@ -539,30 +599,61 @@ public class MainActivity extends Activity {
         return root;
     }
 
+    private View buildPhotoFrame() {
+        photoFrame = new FrameLayout(this);
+        photoFrame.setPadding(dp(7), dp(7), dp(7), dp(7));
+        photoFrame.setBackground(round(0xF2FFFFFF, 0, 10));
+        photoFrame.setElevation(dp(12));
+        photoFrame.setRotation(-2.5f);
+        FrameLayout inner = new FrameLayout(this);
+        inner.setBackground(round(0xFF2A3A40, 0, 6));
+        inner.setClipToOutline(true);
+        photoB = new ImageView(this);
+        photoA = new ImageView(this);
+        for (ImageView iv : new ImageView[]{photoB, photoA}) {
+            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            inner.addView(iv, new FrameLayout.LayoutParams(-1, -1));
+        }
+        photoHint = text(13, SOFT, false);
+        photoHint.setPadding(dp(12), dp(12), dp(12), dp(12));
+        photoHint.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        inner.addView(photoHint, new FrameLayout.LayoutParams(-1, -1));
+        photoFrame.addView(inner, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(270), dp(190));
+        lp.setMargins(0, dp(20), dp(6), 0);
+        lp.gravity = Gravity.END;
+        photoFrame.setLayoutParams(lp);
+        return photoFrame;
+    }
+
     private View buildBar() {
         bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(dp(16), dp(8), dp(10), dp(8));
-        bar.setBackground(round(0xCC0B1A22, 0x55E8C35A, 26));
+        bar.setPadding(dp(14), dp(5), dp(8), dp(5));
+        bar.setBackground(round(GLASS, 0x55E8C35A, 26));
         bar.setVisibility(View.GONE);
-        barIcon = text(20, GOLD, false);
-        bar.addView(barIcon);
+
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
-        info.setPadding(dp(12), 0, dp(12), 0);
-        barTitle = text(16, WHITE, true);
-        barSub = text(12, DIM, false);
+        barTitle = text(15, WHITE, true);
+        barSub = text(11, DIM, false);
         barTitle.setGravity(Gravity.START);
         barSub.setGravity(Gravity.START);
         info.addView(barTitle, startAligned());
         info.addView(barSub, startAligned());
-        barProgress = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        barProgress.setProgressTintList(android.content.res.ColorStateList.valueOf(GOLD));
-        info.addView(barProgress, new LinearLayout.LayoutParams(dp(220), dp(6)));
+        barProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        barProgress.setProgressTintList(ColorStateList.valueOf(GOLD));
+        info.addView(barProgress, new LinearLayout.LayoutParams(dp(130), dp(5)));
         bar.addView(info);
-        barTime = text(13, SOFT, false);
+
+        eq = new EqView(this, GOLD);
+        LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(dp(80), dp(30));
+        elp.setMargins(dp(12), 0, dp(8), 0);
+        bar.addView(eq, elp);
+
+        barTime = text(12, SOFT, false);
         barTime.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-        barTime.setPadding(dp(4), 0, dp(10), 0);
+        barTime.setPadding(dp(4), 0, dp(8), 0);
         bar.addView(barTime);
         barPlay = barButton("⏸", v -> { player.togglePause(); updateBar(); });
         bar.addView(barPlay);
@@ -570,19 +661,33 @@ public class MainActivity extends Activity {
         return bar;
     }
 
+    private TextView pill(String label) {
+        TextView p = text(14, WHITE, false);
+        p.setText(label);
+        p.setPadding(dp(16), dp(8), dp(16), dp(8));
+        p.setBackground(round(0x33FFFFFF, 0, 20));
+        p.setFocusable(true);
+        p.setClickable(true);
+        p.setOnFocusChangeListener((v, has) -> {
+            v.setBackground(round(has ? 0xEEFFFFFF : 0x33FFFFFF, 0, 20));
+            ((TextView) v).setTextColor(has ? 0xFF10261F : WHITE);
+        });
+        return p;
+    }
+
     private TextView barButton(String label, View.OnClickListener click) {
-        TextView b = text(18, WHITE, true);
+        TextView b = text(16, WHITE, true);
         b.setText(label);
         b.setFocusable(true);
         b.setClickable(true);
         b.setOnClickListener(click);
-        b.setBackground(round(0x22FFFFFF, 0, 22));
+        b.setBackground(round(0x22FFFFFF, 0, 20));
         b.setOnFocusChangeListener((v, has) -> {
-            v.setBackground(round(has ? 0xEEFFFFFF : 0x22FFFFFF, 0, 22));
+            v.setBackground(round(has ? 0xEEFFFFFF : 0x22FFFFFF, 0, 20));
             ((TextView) v).setTextColor(has ? 0xFF10261F : WHITE);
         });
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(44), dp(44));
-        lp.setMargins(dp(4), 0, dp(4), 0);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(38), dp(38));
+        lp.setMargins(dp(3), 0, dp(3), 0);
         b.setLayoutParams(lp);
         return b;
     }
@@ -599,6 +704,12 @@ public class MainActivity extends Activity {
     private static LinearLayout.LayoutParams startAligned() {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
         lp.gravity = Gravity.START;
+        return lp;
+    }
+
+    private static LinearLayout.LayoutParams endAligned() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.gravity = Gravity.END;
         return lp;
     }
 

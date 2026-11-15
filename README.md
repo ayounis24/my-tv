@@ -11,8 +11,8 @@
 
 ## التثبيت على التلفزيون (بدون كمبيوتر)
 1. على التلفزيون، نزّل تطبيق **Downloader** من متجر Google Play.
-2. افتحه واكتب الرابط:
-   `https://github.com/ayounis24/my-tv/releases/latest/download/my-tv.apk`
+2. افتحه واكتب الرابط القصير: `ayounis24.github.io/my-tv`
+   (أو الرابط الكامل: `https://github.com/ayounis24/my-tv/releases/latest/download/my-tv.apk`)
 3. وافق على «السماح بالتثبيت من هذا المصدر»، وبعدها اضغط **تثبيت**.
 
 ## تغيير المدينة

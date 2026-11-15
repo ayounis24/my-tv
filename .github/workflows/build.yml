@@ -30,3 +30,11 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk my-tv.apk
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest my-tv.apk --title "شاشتي (آخر نسخة)" --notes "نزّلها على التلفزيون من تطبيق Downloader"
+      - name: Short download page (gh-pages)
+        run: |
+          mkdir -p "$RUNNER_TEMP/pages" && cp site/index.html my-tv.apk "$RUNNER_TEMP/pages/"
+          cd "$RUNNER_TEMP/pages"
+          git init -q -b gh-pages
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Download page"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" gh-pages

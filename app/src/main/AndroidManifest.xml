@@ -47,6 +47,12 @@
             android:launchMode="singleTop"
             android:excludeFromRecents="true" />
 
+        <activity android:name=".AzkarActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true" />
+
         <receiver android:name=".AdhanReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

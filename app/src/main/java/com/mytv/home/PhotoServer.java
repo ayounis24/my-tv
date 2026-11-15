@@ -137,6 +137,9 @@ public final class PhotoServer {
                 c.startActivity(new android.content.Intent(c, AdhanActivity.class).putExtra(AdhanActivity.EXTRA_NAME, "المغرب")
                         .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
                 send(out, 200, "text/plain", "ok".getBytes());
+            } else if (method.equals("POST") && path.equals("/azkar-test")) {
+                AzkarActivity.open(c, !"e".equals(param(query, "mode")));
+                send(out, 200, "text/plain", "ok".getBytes());
             } else if (path.equals("/adhan-status")) {
                 File f = AdhanActivity.adhanFile(c);
                 send(out, 200, "application/json", ("{\"has\":" + (f.exists() && f.length() > 0) + ",\"mb\":"
@@ -206,6 +209,10 @@ public final class PhotoServer {
             + "<fieldset><legend>🔊 صوت الأذان</legend><small id=as>…</small>"
             + "<label style='margin:12px 0'>🎵 اختار ملف الأذان<input id=af type=file accept='audio/*,.mp3,.m4a,.aac,.wav'></label>"
             + "<button id=at style='background:#14524b;color:#fff;border:0;border-radius:12px;padding:12px 22px;font-size:16px'>▶ جرّب الأذان على التليفزيون</button>"
+            + "</fieldset>"
+            + "<fieldset><legend>📿 الأذكار</legend><small>بتفتح لوحدها بعد أذان الفجر والعصر بـ25 دقيقة.</small><br><br>"
+            + "<button onclick=\"fetch(q('/azkar-test?mode=m'),{method:'POST'})\" style='background:#f4be86;color:#3a2410;border:0;border-radius:12px;padding:12px 18px;font-size:16px'>☀️ جرّب أذكار الصباح</button> "
+            + "<button onclick=\"fetch(q('/azkar-test?mode=e'),{method:'POST'})\" style='background:#2a1e5c;color:#fff;border:0;border-radius:12px;padding:12px 18px;font-size:16px'>🌙 جرّب أذكار المساء</button>"
             + "</fieldset>"
             + "<fieldset><legend>🏡 العيلة</legend><small>الأسامي دي بتظهر على الشاشة في الأدعية، ومحفوظة على التليفزيون بس.</small>"
             + "<input id=dad placeholder='اسم الأب'><input id=mom placeholder='اسم الأم'>"

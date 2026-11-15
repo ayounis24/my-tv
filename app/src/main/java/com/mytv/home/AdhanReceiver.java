@@ -24,6 +24,12 @@ public class AdhanReceiver extends BroadcastReceiver {
     public void onReceive(Context ctx, Intent intent) {
         if (ACTION.equals(intent.getAction())) {
             String name = intent.getStringExtra("name");
+            String azkar = intent.getStringExtra("azkar");
+            if (azkar != null) {
+                AzkarActivity.launch(ctx, "morning".equals(azkar));
+                scheduleNext(ctx);
+                return;
+            }
             if (name != null) {
                 notifyAdhan(ctx, name);
                 AdhanActivity.launch(ctx, name); // works when the TV lets us show over other apps
@@ -33,6 +39,10 @@ public class AdhanReceiver extends BroadcastReceiver {
         scheduleNext(ctx);
     }
 
+    /** Minutes after the adhan when the azkar screen opens (time to pray first). */
+    static final int AZKAR_AFTER = 25;
+
+    /** Sets one exact alarm for the next event: an adhan, or the morning / evening azkar. */
     static void scheduleNext(Context ctx) {
         PrayerTimes pt = new PrayerTimes(BuildConfig.CITY_LAT, BuildConfig.CITY_LON, BuildConfig.CITY_TZ);
         ZoneOffset zone = MainActivity.zone();
@@ -40,25 +50,32 @@ public class AdhanReceiver extends BroadcastReceiver {
         for (int dayOffset = 0; dayOffset < 2; dayOffset++) {
             LocalDate day = now.toLocalDate().plusDays(dayOffset);
             int[] m = pt.minutesFor(day);
-            for (int i = 0; i < m.length; i++) {
-                if (!PrayerTimes.IS_PRAYER[i]) continue;
-                LocalDateTime at = day.atStartOfDay().plusMinutes(m[i]);
-                if (at.isAfter(now.plusSeconds(30))) {
-                    long ms = at.toInstant(zone).toEpochMilli();
-                    Intent i2 = new Intent(ctx, AdhanReceiver.class).setAction(ACTION).putExtra("name", PrayerTimes.NAMES[i]);
-                    PendingIntent pi = PendingIntent.getBroadcast(ctx, 1, i2,
-                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-                    AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
-                    try {
-                        PendingIntent show = PendingIntent.getActivity(ctx, 2, new Intent(ctx, MainActivity.class),
-                                PendingIntent.FLAG_IMMUTABLE);
-                        am.setAlarmClock(new AlarmManager.AlarmClockInfo(ms, show), pi); // exact, on the minute
-                    } catch (SecurityException e) {
-                        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ms, pi);
-                    }
-                    return;
-                }
+            // events of the day in time order: [minute, kind] kind: 0..5 prayer index, 10 morning azkar, 11 evening azkar
+            java.util.List<int[]> ev = new java.util.ArrayList<>();
+            for (int i = 0; i < m.length; i++) if (PrayerTimes.IS_PRAYER[i]) ev.add(new int[]{m[i], i});
+            ev.add(new int[]{m[0] + AZKAR_AFTER, 10});
+            ev.add(new int[]{m[3] + AZKAR_AFTER, 11});
+            ev.sort((x, y) -> x[0] - y[0]);
+            for (int[] e : ev) {
+                LocalDateTime at = day.atStartOfDay().plusMinutes(e[0]);
+                if (!at.isAfter(now.plusSeconds(30))) continue;
+                Intent i2 = new Intent(ctx, AdhanReceiver.class).setAction(ACTION);
+                if (e[1] >= 10) i2.putExtra("azkar", e[1] == 10 ? "morning" : "evening");
+                else i2.putExtra("name", PrayerTimes.NAMES[e[1]]);
+                setAlarm(ctx, at.toInstant(zone).toEpochMilli(), i2);
+                return;
             }
+        }
+    }
+
+    private static void setAlarm(Context ctx, long ms, Intent i2) {
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, 1, i2, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        try {
+            PendingIntent show = PendingIntent.getActivity(ctx, 2, new Intent(ctx, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
+            am.setAlarmClock(new AlarmManager.AlarmClockInfo(ms, show), pi); // exact, on the minute
+        } catch (SecurityException e) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ms, pi);
         }
     }
 

@@ -259,6 +259,8 @@ public class MainActivity extends Activity {
                 AdhanActivity.launch(this, PrayerTimes.NAMES[i]);
             }
         }
+        if (nowMin == t[0] + AdhanReceiver.AZKAR_AFTER) AzkarActivity.launch(this, true);
+        if (nowMin == t[3] + AdhanReceiver.AZKAR_AFTER) AzkarActivity.launch(this, false);
         banner.setVisibility(System.currentTimeMillis() < bannerUntil ? View.VISIBLE : View.GONE);
         updateBar();
     }

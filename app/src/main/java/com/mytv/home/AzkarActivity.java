@@ -128,6 +128,12 @@ public class AzkarActivity extends Activity {
                 ring.animate().scaleX(1.06f).scaleY(1.06f).setDuration(80).withEndAction(() ->
                         ring.animate().scaleX(1f).scaleY(1f).setDuration(120).start()).start();
             }
+            boolean noteNow = !c.note.isEmpty() && t >= c.noteAt;
+            if (noteNow && eveNote.getVisibility() != View.VISIBLE) {
+                eveNote.setVisibility(View.VISIBLE);
+                eveNote.setAlpha(0f);
+                eveNote.animate().alpha(1f).setDuration(700).start();
+            }
             int max = scroll.getChildAt(0).getHeight() - scroll.getHeight();
             if (max > 0) {
                 float span = Math.max(1f, (c.reps.length > 1 ? c.reps[1] : c.end) - c.start);
@@ -147,9 +153,8 @@ public class AzkarActivity extends Activity {
         text.setText(c.text);
         text.setTextSize(c.text.length() > 380 ? 25 : c.text.length() > 220 ? 28 : 32);
         scroll.scrollTo(0, 0);
-        boolean showEve = !c.evening.isEmpty();
-        eveNote.setVisibility(showEve ? View.VISIBLE : View.GONE);
-        if (showEve) eveNote.setText("🌙  في المساء قل: " + c.evening);
+        eveNote.setVisibility(View.GONE);
+        eveNote.setText(c.note.isEmpty() ? "" : "✨  " + c.note);
         text.setAlpha(0f);
         text.animate().alpha(1f).setDuration(500).start();
         updateCueCounter();

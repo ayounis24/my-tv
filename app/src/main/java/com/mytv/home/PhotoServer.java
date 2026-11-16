@@ -231,7 +231,7 @@ public final class PhotoServer {
             + "#g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}"
             + ".c{position:relative}.c img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}"
             + ".c button{position:absolute;top:6px;left:6px;border:0;border-radius:50%;width:32px;height:32px;background:#000a;color:#fff;font-size:16px}"
-            + "</style></head><body><h1>شاشتي 🏡</h1><p>آخر صورتين بتضيفهم بيظهروا ثابتين على التليفزيون في دواير. والصور بتفضل محفوظة على التليفزيون بس.</p>"
+            + "</style></head><body><h1>شاشتي 🏡</h1><p>آخر 3 صور بتضيفهم بيظهروا ثابتين على التليفزيون في دواير. والصور بتفضل محفوظة على التليفزيون بس.</p>"
             + "<fieldset><legend>💌 رسالة للتليفزيون</legend>"
             + "<div id=who style='display:flex;gap:8px;margin-bottom:10px'>"
             + "<button data-w=dad class=w>👨 بابا</button><button data-w=mom class=w>👩 ماما</button></div>"

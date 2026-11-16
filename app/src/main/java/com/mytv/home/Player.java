@@ -24,9 +24,12 @@ import java.util.Locale;
 public final class Player {
     public enum State { IDLE, LOADING, PLAYING, PAUSED, ERROR }
 
-    public static final String RECITER = "ماهر المعيقلي";
-    private static final String RECITER_MATCH = "المعيقلي";
-    private static final String FALLBACK_SERVER = "https://server12.mp3quran.net/maher/";
+    /** {name shown, name match on mp3quran.net, fallback server} — always the Hafs murattal recording. */
+    public static final String[][] RECITERS = {
+            {"ماهر المعيقلي", "المعيقلي", "https://cdn.mp3quran.net/audio/maher-muaiqly/r1/"},
+            {"مشاري العفاسي", "العفاسي", "https://cdn.mp3quran.net/audio/mishary-alafasy/r1/"},
+    };
+    public static final String RECITER = RECITERS[0][0];
 
     private static Player instance;
     public static Player get(Context ctx) {
@@ -38,7 +41,8 @@ public final class Player {
     private final Handler main = new Handler(Looper.getMainLooper());
     private MediaPlayer mp;
     private AudioFocusRequest focus;
-    private String server;
+    private final String[] servers = new String[RECITERS.length];
+    public int reciter = 0;
 
     public State state = State.IDLE;
     public String title = "";
@@ -51,9 +55,12 @@ public final class Player {
     }
 
     /** Play surah number n (1..114). Pressing the same item again pauses/resumes. */
-    public void playSurah(int n, String name) {
-        if (toggleIfSame("surah" + n)) return;
-        start("surah" + n, "سورة " + name, RECITER, false, () -> surahUrl(n));
+    public void playSurah(int n, String name) { playSurah(n, name, reciter); }
+
+    public void playSurah(int n, String name, int r) {
+        if (toggleIfSame("s" + r + "_" + n)) return;
+        reciter = r;
+        start("s" + r + "_" + n, "سورة " + name, RECITERS[r][0], false, () -> surahUrl(r, n));
     }
 
     /** Ruqya: a live mp3quran radio station whose name contains الرقية. */
@@ -77,7 +84,7 @@ public final class Player {
     }
 
     public int audioSession() { try { return mp != null ? mp.getAudioSessionId() : 0; } catch (Exception e) { return 0; } }
-    public int surah() { return key.startsWith("surah") ? Integer.parseInt(key.substring(5)) : 0; }
+    public int surah() { return key.startsWith("s") && key.contains("_") ? Integer.parseInt(key.substring(key.indexOf('_') + 1)) : 0; }
 
     public int positionMs() { try { return mp != null ? mp.getCurrentPosition() : 0; } catch (Exception e) { return 0; } }
     public int durationMs() { try { return mp != null && !live ? mp.getDuration() : 0; } catch (Exception e) { return 0; } }
@@ -118,7 +125,7 @@ public final class Player {
             p.setOnCompletionListener(x -> {
                 // continue with the next surah, like listening to the whole mushaf
                 int n = surah();
-                if (n > 0 && n < 114) { key = ""; playSurah(n + 1, Surahs.NAMES[n]); } else stop();
+                if (n > 0 && n < 114) { key = ""; playSurah(n + 1, Surahs.NAMES[n], reciter); } else stop();
             });
             p.setOnErrorListener((x, w, e) -> { state = State.ERROR; return true; });
             mp = p;
@@ -136,23 +143,26 @@ public final class Player {
         return audio.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
     }
 
-    private String surahUrl(int n) {
-        if (server == null) {
+    private String surahUrl(int r, int n) {
+        if (servers[r] == null) {
             try {
                 JSONArray rs = new JSONObject(get("https://www.mp3quran.net/api/v3/reciters?language=ar")).getJSONArray("reciters");
-                for (int i = 0; i < rs.length() && server == null; i++) {
-                    JSONObject r = rs.getJSONObject(i);
-                    if (!r.optString("name").contains(RECITER_MATCH)) continue;
-                    JSONArray ms = r.getJSONArray("moshaf");
+                for (int i = 0; i < rs.length() && servers[r] == null; i++) {
+                    JSONObject rec = rs.getJSONObject(i);
+                    if (!rec.optString("name").contains(RECITERS[r][1])) continue;
+                    JSONArray ms = rec.getJSONArray("moshaf");
                     for (int j = 0; j < ms.length(); j++) {
                         JSONObject m = ms.getJSONObject(j);
-                        if (("," + m.optString("surah_list") + ",").contains("," + n + ",")) { server = m.getString("server"); break; }
+                        String mn = m.optString("name");
+                        // Hafs 'an 'Asim, murattal, complete (not mujawwad / mu'allim / other riwayat)
+                        if (mn.contains("حفص") && mn.contains("مرتل") && m.optInt("surah_total") == 114) { servers[r] = m.getString("server"); break; }
                     }
                 }
             } catch (Exception ignored) { }
-            if (server == null) server = FALLBACK_SERVER;
+            if (servers[r] == null) servers[r] = RECITERS[r][2];
         }
-        return (server.endsWith("/") ? server : server + "/") + String.format(Locale.US, "%03d.mp3", n);
+        String sv = servers[r];
+        return (sv.endsWith("/") ? sv : sv + "/") + String.format(Locale.US, "%03d.mp3", n);
     }
 
     private static String radioUrl(String match) throws Exception {

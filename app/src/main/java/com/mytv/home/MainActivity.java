@@ -85,6 +85,33 @@ public class MainActivity extends Activity {
     private final TextView[] chipTime = new TextView[6];
     private final LinearLayout[] chips = new LinearLayout[6];
     private LinearLayout dock;
+    private TextView dockHint;
+    private View focusSink;
+
+    private void showDock() {
+        if (dock.getVisibility() != View.VISIBLE) {
+            dock.setVisibility(View.VISIBLE);
+            dockHint.setVisibility(View.GONE);
+            dock.setAlpha(0f);
+            dock.setTranslationY(dp(30));
+            dock.animate().alpha(1f).translationY(0).setDuration(250).start();
+            if (firstCard != null) firstCard.requestFocus();
+        }
+        handler.removeCallbacks(autoHideDock);
+        handler.postDelayed(autoHideDock, 20_000);
+    }
+
+    private void hideDock() {
+        handler.removeCallbacks(autoHideDock);
+        if (dock.getVisibility() != View.VISIBLE) return;
+        dock.setVisibility(View.GONE);
+        dockHint.setVisibility(View.VISIBLE);
+        focusSink.requestFocus();
+    }
+
+    private final Runnable autoHideDock = () -> {
+        if (mushaf.getVisibility() != View.VISIBLE && popScrim.getVisibility() != View.VISIBLE) hideDock();
+    };
     private View firstCard;
 
     // player bar
@@ -99,7 +126,8 @@ public class MainActivity extends Activity {
     private BaseAdapter mushafAdapter;
 
     // family portraits (two fixed circles)
-    private final ImageView[] portraits = new ImageView[2];
+    private static final int PORTRAITS = 3;
+    private final ImageView[] portraits = new ImageView[PORTRAITS];
     private TextView photoHint, famTitle, famKids, famDua;
     private LinearLayout famCard, pinCard, famStars;
     private TextView pinAddr;
@@ -120,7 +148,7 @@ public class MainActivity extends Activity {
         pinCard.setVisibility(View.GONE);
         testCard.setVisibility(View.GONE);
         popScrim.setVisibility(View.GONE);
-        if (firstCard != null) firstCard.requestFocus();
+        if (dock.getVisibility() == View.VISIBLE && firstCard != null) firstCard.requestFocus(); else focusSink.requestFocus();
     }
     private LinearLayout testCard;
     private final TextView[] pinDigits = new TextView[4];
@@ -165,12 +193,14 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(adhanNow, f, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(adhanNow, f);
         fillDock();
+        dock.setVisibility(View.GONE);
+        dockHint.setVisibility(View.VISIBLE);
         handler.post(ticker);
         handler.post(zikrRotator);
         handler.post(weatherUpdater);
         handler.post(photoRotator);
         handler.postDelayed(duaRotator, 25000);
-        if (firstCard != null) firstCard.requestFocus();
+        focusSink.requestFocus();
         overlayPill.setVisibility(Settings.canDrawOverlays(this) ? View.GONE : View.VISIBLE);
     }
 
@@ -204,6 +234,14 @@ public class MainActivity extends Activity {
             Messages.markSeen(this);
             msgBar.animate().alpha(0f).translationY(dp(30)).setDuration(300).withEndAction(() -> msgBar.setVisibility(View.GONE)).start();
             return true;
+        }
+        if (e.getAction() == KeyEvent.ACTION_DOWN && mushaf.getVisibility() != View.VISIBLE && popScrim.getVisibility() != View.VISIBLE) {
+            boolean hidden = dock.getVisibility() != View.VISIBLE;
+            if (hidden && e.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN) { showDock(); return true; }
+            if (hidden && (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER || e.getKeyCode() == KeyEvent.KEYCODE_ENTER)
+                    && focusSink.hasFocus()) { showDock(); return true; }
+            if (!hidden && e.getKeyCode() == KeyEvent.KEYCODE_BACK && !bar.hasFocus()) { hideDock(); return true; }
+            if (!hidden) { handler.removeCallbacks(autoHideDock); handler.postDelayed(autoHideDock, 20_000); }
         }
         return super.dispatchKeyEvent(e);
     }
@@ -375,17 +413,18 @@ public class MainActivity extends Activity {
         photoHint.setVisibility(ready ? View.GONE : View.VISIBLE);
         refreshFamily();
         String key = "";
-        File[] pick = new File[2];
-        for (int i = 0; i < 2; i++) {
-            int idx = files.length - 2 + i;
-            if (files.length == 1) idx = i == 0 ? 0 : -1;
-            pick[i] = idx >= 0 && idx < files.length ? files[idx] : null;
+        File[] pick = new File[PORTRAITS];
+        int from = Math.max(0, files.length - PORTRAITS);
+        for (int i = 0; i < PORTRAITS; i++) {
+            int idx = from + i;
+            pick[i] = idx < files.length ? files[idx] : null;
             key += pick[i] == null ? "-" : pick[i].getName();
         }
-        portraits[1].setVisibility(pick[1] != null || !ready ? View.VISIBLE : View.GONE);
+        for (int i = 0; i < PORTRAITS; i++)
+            ((View) portraits[i].getParent()).setVisibility(pick[i] != null || !ready ? View.VISIBLE : View.GONE);
         if (key.equals(shownPhotos)) return;
         shownPhotos = key;
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < PORTRAITS; i++) {
             ImageView iv = portraits[i];
             File f = pick[i];
             if (f == null) { iv.setImageDrawable(null); continue; }
@@ -520,7 +559,8 @@ public class MainActivity extends Activity {
 
     private void fillDock() {
         dock.removeAllViews();
-        firstCard = addCard(cardFace("📖", "المصحف", Player.RECITER, 0xFF6B4E16, 0xFF2E2108), v -> openMushaf());
+        firstCard = addCard(cardFace("📖", "المصحف", Player.RECITERS[0][0], 0xFF6B4E16, 0xFF2E2108), v -> openMushaf(0));
+        addCard(cardFace("📖", "المصحف", Player.RECITERS[1][0], 0xFF1D4E6B, 0xFF0B2233), v -> openMushaf(1));
         addCard(hifzFace(), v -> startActivity(new Intent(this, JuzAmmaActivity.class)));
         addCard(cardFace("⭐", "نجوم البنات", "نجمة لكل صلاة", 0xFFFFC857, 0xFFFF9E6B),
                 v -> startActivity(new Intent(this, StarsActivity.class)));
@@ -575,7 +615,7 @@ public class MainActivity extends Activity {
         iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
         iv.setImageResource(R.drawable.card_hifz);
         f.addView(iv, new FrameLayout.LayoutParams(-1, -1));
-        TextView t = text(14, 0xFFF3E3B5, true);
+        TextView t = text(12, 0xFFF3E3B5, true);
         t.setText("احفظ مع الحصري");
         t.setPadding(0, dp(3), 0, dp(4));
         t.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[]{0xCC000000, 0x00000000}));
@@ -588,9 +628,9 @@ public class MainActivity extends Activity {
         l.setOrientation(LinearLayout.VERTICAL);
         l.setGravity(Gravity.CENTER);
         l.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{c1, c2}));
-        TextView t = text(19, 0xFFF3E3B5, true);
+        TextView t = text(16, 0xFFF3E3B5, true);
         t.setText(icon + " " + title);
-        TextView st = text(12, SOFT, false);
+        TextView st = text(11, SOFT, false);
         st.setText(sub);
         l.addView(t);
         l.addView(st);
@@ -614,19 +654,24 @@ public class MainActivity extends Activity {
             v.setElevation(has ? dp(10) : 0);
             ring.setVisibility(has ? View.VISIBLE : View.INVISIBLE);
         });
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(176), dp(99));
-        lp.setMargins(dp(10), dp(10), dp(10), dp(10));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(128), dp(72));
+        lp.setMargins(dp(7), dp(8), dp(7), dp(8));
         dock.addView(card, lp);
         return card;
     }
 
     // ---------- mushaf ----------
 
-    private void openMushaf() {
+    private int mushafReciter = 0;
+    private TextView mushafTitle;
+
+    private void openMushaf(int r) {
+        mushafReciter = r;
+        mushafTitle.setText("📖 المصحف كامل  •  بصوت الشيخ " + Player.RECITERS[r][0]);
         mushaf.setVisibility(View.VISIBLE);
         mushafAdapter.notifyDataSetChanged();
-        int cur = player.surah();
-        mushafGrid.setSelection(cur > 0 ? cur : 0);
+        int cur = player.reciter == mushafReciter ? player.surah() : 0;
+        mushafGrid.setSelection(cur > 0 ? cur : 1);
         mushafGrid.requestFocus();
     }
 
@@ -640,10 +685,9 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(24), dp(18), dp(24), dp(18));
         box.setBackground(round(0xF00B1A22, 0x66E8C35A, 22));
-        TextView title = text(22, GOLD, true);
-        title.setText("📖 المصحف كامل  •  بصوت الشيخ " + Player.RECITER);
-        title.setPadding(0, 0, 0, dp(4));
-        box.addView(title);
+        mushafTitle = text(22, GOLD, true);
+        mushafTitle.setPadding(0, 0, 0, dp(4));
+        box.addView(mushafTitle);
         TextView hint = text(13, DIM, false);
         hint.setText("اختار السورة واضغط OK  •  رجوع للإغلاق  •  بعد ما السورة تخلص اللي بعدها بتشتغل لوحدها");
         hint.setPadding(0, 0, 0, dp(12));
@@ -663,7 +707,7 @@ public class MainActivity extends Activity {
                 TextView tv = conv instanceof TextView ? (TextView) conv : text(16, WHITE, true);
                 tv.setPadding(dp(6), dp(12), dp(6), dp(12));
                 tv.setSingleLine(true);
-                boolean playing = i == 0 ? "ruqya".equals(player.key) : player.surah() == i;
+                boolean playing = i == 0 ? "ruqya".equals(player.key) : player.reciter == mushafReciter && player.surah() == i;
                 tv.setText(i == 0 ? "🎧 الرقية الشرعية" : i + ". " + Surahs.NAMES[i - 1]);
                 tv.setTextColor(playing ? 0xFF10261F : WHITE);
                 tv.setBackground(round(playing ? GOLD : (i == 0 ? 0x5514524B : 0x22FFFFFF), 0, 12));
@@ -672,7 +716,7 @@ public class MainActivity extends Activity {
         };
         mushafGrid.setAdapter(mushafAdapter);
         mushafGrid.setOnItemClickListener((p, v, i, id) -> {
-            if (i == 0) player.playRuqya(); else player.playSurah(i, Surahs.NAMES[i - 1]);
+            if (i == 0) player.playRuqya(); else player.playSurah(i, Surahs.NAMES[i - 1], mushafReciter);
             mushafAdapter.notifyDataSetChanged();
             updateBar();
         });
@@ -815,7 +859,22 @@ public class MainActivity extends Activity {
 
         dock = new LinearLayout(this);
         dock.setClipChildren(false);
-        bottom.addView(dock, startAligned());
+        dock.setVisibility(View.GONE);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(-2, -2);
+        dlp.gravity = Gravity.CENTER_HORIZONTAL;
+        bottom.addView(dock, dlp);
+        dockHint = text(13, SOFT, true);
+        dockHint.setText("⬇  التطبيقات");
+        dockHint.setPadding(dp(16), dp(5), dp(16), dp(5));
+        dockHint.setBackground(round(0x33FFFFFF, 0, 14));
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-2, -2);
+        hl.gravity = Gravity.CENTER_HORIZONTAL;
+        hl.setMargins(0, dp(6), 0, dp(2));
+        bottom.addView(dockHint, hl);
+        focusSink = new View(this);
+        focusSink.setFocusable(true);
+        focusSink.setFocusableInTouchMode(true);
+        overlay.addView(focusSink, new FrameLayout.LayoutParams(1, 1));
         overlay.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
 
         overlay.addView(buildMushaf(), new FrameLayout.LayoutParams(-1, -1));
@@ -868,14 +927,17 @@ public class MainActivity extends Activity {
 
         FrameLayout pair = new FrameLayout(this);
         pair.setClipChildren(false);
-        int size = dp(112), overlap = dp(18);
-        for (int i = 0; i < 2; i++) {
+        int size = dp(96), overlap = dp(16);
+        float[] tilt = {-5f, 3f, -2f};
+        int[] drop = {0, dp(16), dp(4)};
+        for (int i = 0; i < PORTRAITS; i++) {
             FrameLayout ring = new FrameLayout(this);
             GradientDrawable gold = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xFFF6DE8D, 0xFFB8892E});
             gold.setShape(GradientDrawable.OVAL);
             ring.setBackground(gold);
             ring.setPadding(dp(5), dp(5), dp(5), dp(5));
             ring.setElevation(dp(14 - i * 2));
+            ring.setVisibility(View.VISIBLE);
             ImageView iv = new ImageView(this);
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             GradientDrawable oval = new GradientDrawable();
@@ -887,11 +949,11 @@ public class MainActivity extends Activity {
             portraits[i] = iv;
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size, size, Gravity.TOP | Gravity.LEFT);
             lp.leftMargin = i * (size - overlap);
-            lp.topMargin = i == 0 ? 0 : dp(20);
-            ring.setRotation(i == 0 ? -4f : 4f);
+            lp.topMargin = drop[i];
+            ring.setRotation(tilt[i]);
             pair.addView(ring, lp);
         }
-        col.addView(pair, new LinearLayout.LayoutParams(size * 2 - overlap, size + dp(20)));
+        col.addView(pair, new LinearLayout.LayoutParams(size * PORTRAITS - overlap * (PORTRAITS - 1), size + dp(16)));
 
         famCard = new LinearLayout(this);
         famCard.setOrientation(LinearLayout.VERTICAL);

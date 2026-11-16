@@ -2,7 +2,6 @@ name: Build TV app
 on:
   push:
     branches: [main]
-    paths-ignore: ['office/**', '.github/workflows/office-pages.yml']
   workflow_dispatch:
 permissions:
   contents: write

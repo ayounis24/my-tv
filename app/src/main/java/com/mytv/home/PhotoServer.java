@@ -144,6 +144,18 @@ public final class PhotoServer {
                 File f = AdhanActivity.adhanFile(c);
                 send(out, 200, "application/json", ("{\"has\":" + (f.exists() && f.length() > 0) + ",\"mb\":"
                         + String.format(Locale.US, "%.1f", f.length() / 1048576.0) + "}").getBytes());
+            } else if (method.equals("POST") && path.equals("/msg")) {
+                byte[] body = new byte[Math.min(Math.max(length, 0), 4000)];
+                int got = 0;
+                while (got < body.length) { int r = in.read(body, got, body.length - got); if (r < 0) break; got += r; }
+                org.json.JSONObject j = new org.json.JSONObject(new String(body, 0, got, StandardCharsets.UTF_8));
+                String from = "mom".equals(j.optString("from")) ? "mom" : "dad";
+                String text = j.optString("text").trim();
+                if (text.length() > 300) text = text.substring(0, 300);
+                if (!text.isEmpty()) Messages.post(c, from, text);
+                send(out, 200, "text/plain", "ok".getBytes());
+            } else if (path.equals("/msg-status")) {
+                send(out, 200, "application/json; charset=utf-8", Messages.current(c).toString().getBytes(StandardCharsets.UTF_8));
             } else if (method.equals("POST") && path.equals("/family")) {
                 byte[] body = new byte[Math.min(Math.max(length, 0), 20000)];
                 int got = 0;
@@ -196,6 +208,8 @@ public final class PhotoServer {
             + "<meta name=viewport content='width=device-width,initial-scale=1'><title>صور شاشتي</title><style>"
             + "body{margin:0;font-family:-apple-system,sans-serif;background:#0f2a2a;color:#f5f1e6;padding:20px}"
             + "h1{font-size:24px;margin:0 0 6px}p{color:#b9c4bc;margin:0 0 18px}"
+            + ".w{flex:1;border:2px solid #e8c35a55;background:none;color:#f5f1e6;border-radius:12px;padding:10px;font-size:17px}.w.on{background:#e8c35a;color:#10261f;border-color:#e8c35a}"
+            + ".qk{border:0;border-radius:16px;padding:8px 12px;background:#ffffff22;color:#f5f1e6;font-size:15px}"
             + "fieldset{border:1px solid #e8c35a55;border-radius:14px;margin:22px 0;padding:14px}legend{color:#e8c35a;font-weight:bold;padding:0 6px}"
             + "fieldset input{display:block;width:100%;box-sizing:border-box;margin:6px 0 12px;padding:12px;border-radius:10px;border:0;font-size:17px}"
             + "fieldset small{color:#b9c4bc}#sv{background:#e8c35a;color:#10261f;border:0;border-radius:12px;padding:12px 26px;font-size:17px;font-weight:bold}"
@@ -205,6 +219,13 @@ public final class PhotoServer {
             + ".c{position:relative}.c img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}"
             + ".c button{position:absolute;top:6px;left:6px;border:0;border-radius:50%;width:32px;height:32px;background:#000a;color:#fff;font-size:16px}"
             + "</style></head><body><h1>شاشتي 🏡</h1><p>آخر صورتين بتضيفهم بيظهروا ثابتين على التليفزيون في دواير. والصور بتفضل محفوظة على التليفزيون بس.</p>"
+            + "<fieldset><legend>💌 رسالة للتليفزيون</legend>"
+            + "<div id=who style='display:flex;gap:8px;margin-bottom:10px'>"
+            + "<button data-w=dad class=w>👨 بابا</button><button data-w=mom class=w>👩 ماما</button></div>"
+            + "<textarea id=mt rows=3 maxlength=300 placeholder='اكتب رسالتك…' style='width:100%;box-sizing:border-box;border-radius:12px;border:0;padding:12px;font-size:18px'></textarea>"
+            + "<div id=qk style='display:flex;flex-wrap:wrap;gap:6px;margin:8px 0'></div>"
+            + "<button id=ms style='background:#e8c35a;color:#10261f;border:0;border-radius:12px;padding:14px;font-size:18px;font-weight:bold;width:100%'>إبعت 💌</button>"
+            + "<div id=mst style='margin-top:10px;color:#e8c35a'></div></fieldset>"
             + "<label>➕ ضيف صور<input id=f type=file accept='image/*' multiple></label><div id=st></div><div id=g></div>"
             + "<fieldset><legend>🔊 صوت الأذان</legend><small id=as>…</small>"
             + "<label style='margin:12px 0'>🎵 اختار ملف الأذان<input id=af type=file accept='audio/*,.mp3,.m4a,.aac,.wav'></label>"
@@ -246,6 +267,16 @@ public final class PhotoServer {
             + "document.getElementById('as').textContent='بيرفع الأذان…';"
             + "await fetch(q('/adhan'),{method:'POST',body:f});e.target.value='';ads()};"
             + "document.getElementById('at').onclick=()=>fetch(q('/adhan-test'),{method:'POST'});"
-            + "load().then(fam).then(ads);"
+            + "let who=localStorage.getItem('who')||'dad';function sw(){document.querySelectorAll('.w').forEach(b=>b.classList.toggle('on',b.dataset.w==who))}"
+            + "document.querySelectorAll('.w').forEach(b=>b.onclick=()=>{who=b.dataset.w;localStorage.setItem('who',who);sw()});sw();"
+            + "['وحشتوني 🤍','أنا جاي في الطريق 🚗','الأكل جاهز 🍽️','يلا الصلاة 🕌','وقت النوم 🌙','بحبكم ❤️'].forEach(t=>{const b=document.createElement('button');"
+            + "b.className='qk';b.textContent=t;b.onclick=()=>{mt.value=t};qk.appendChild(b)});"
+            + "function ago(ms){const m=Math.round((Date.now()-ms)/60000);return m<1?'دلوقتي':m<60?'من '+m+' دقيقة':new Date(ms).toLocaleTimeString('ar-EG',{hour:'numeric',minute:'2-digit'})}"
+            + "async function mstat(){try{const j=await (await fetch(q('/msg-status'))).json();if(!j.text){mst.textContent='';return}"
+            + "mst.textContent='«'+j.text+'» — '+(j.seen?'اتشافت ✅ '+ago(j.seen):'لسه محدش شافها ⏳')}catch(x){}}"
+            + "ms.onclick=async()=>{const t=mt.value.trim();if(!t)return;ms.disabled=true;"
+            + "await fetch(q('/msg'),{method:'POST',body:JSON.stringify({from:who,text:t})});mt.value='';ms.disabled=false;mstat()};"
+            + "setInterval(mstat,3000);"
+            + "load().then(fam).then(ads).then(mstat);"
             + "</script></body></html>";
 }

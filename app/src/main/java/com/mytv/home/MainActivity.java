@@ -44,6 +44,10 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     static final String ACTION_ADHAN_NOW = "com.mytv.home.ADHAN_NOW";
+    static volatile boolean visible;
+    private LinearLayout msgBar;
+    private TextView msgFrom, msgText;
+    private String shownMsgAt = "";
 
     private static final int GOLD = 0xFFE8C35A;
     private static final int WHITE = 0xFFFFFFFF;
@@ -130,7 +134,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        visible = true;
+        Messages.hideOverlay(this);
         IntentFilter f = new IntentFilter(ACTION_ADHAN_NOW);
+        f.addAction(Messages.ACTION);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(adhanNow, f, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(adhanNow, f);
         fillDock();
@@ -160,8 +167,36 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        visible = false;
         unregisterReceiver(adhanNow);
         handler.removeCallbacksAndMessages(null);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        if (msgBar.getVisibility() == View.VISIBLE && e.getAction() == KeyEvent.ACTION_DOWN
+                && (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER || e.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                || e.getKeyCode() == KeyEvent.KEYCODE_BACK)) {
+            Messages.markSeen(this);
+            msgBar.animate().alpha(0f).translationY(dp(30)).setDuration(300).withEndAction(() -> msgBar.setVisibility(View.GONE)).start();
+            return true;
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
+    private void updateMessage() {
+        org.json.JSONObject m = Messages.current(this);
+        boolean show = m.has("text") && !m.has("seen");
+        if (!show) { if (msgBar.getVisibility() == View.VISIBLE && msgBar.getAlpha() == 1f) msgBar.setVisibility(View.GONE); return; }
+        String at = m.optString("at");
+        if (at.equals(shownMsgAt) && msgBar.getVisibility() == View.VISIBLE) return;
+        shownMsgAt = at;
+        msgFrom.setText("💌  " + Messages.senderLabel(this, m.optString("from")));
+        msgText.setText(m.optString("text"));
+        msgBar.setVisibility(View.VISIBLE);
+        msgBar.setAlpha(0f);
+        msgBar.setTranslationY(dp(40));
+        msgBar.animate().alpha(1f).translationY(0).setDuration(450).start();
     }
 
     @Override
@@ -263,6 +298,7 @@ public class MainActivity extends Activity {
         if (nowMin == t[3] + AdhanReceiver.AZKAR_AFTER) AzkarActivity.launch(this, false);
         banner.setVisibility(System.currentTimeMillis() < bannerUntil ? View.VISIBLE : View.GONE);
         updateBar();
+        updateMessage();
     }
 
     private void updateBar() {
@@ -710,6 +746,29 @@ public class MainActivity extends Activity {
         overlay.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
 
         overlay.addView(buildMushaf(), new FrameLayout.LayoutParams(-1, -1));
+
+        msgBar = new LinearLayout(this);
+        msgBar.setGravity(Gravity.CENTER_VERTICAL);
+        msgBar.setPadding(dp(22), dp(14), dp(22), dp(14));
+        msgBar.setBackground(round(0xF00B1A22, GOLD, 22));
+        msgBar.setElevation(dp(24));
+        msgBar.setVisibility(View.GONE);
+        msgFrom = text(16, GOLD, true);
+        msgBar.addView(msgFrom);
+        msgText = text(24, WHITE, true);
+        msgText.setGravity(Gravity.START);
+        msgText.setMaxLines(2);
+        LinearLayout.LayoutParams mtl = new LinearLayout.LayoutParams(0, -2, 1);
+        mtl.setMargins(dp(18), 0, dp(18), 0);
+        msgBar.addView(msgText, mtl);
+        TextView ok = text(14, 0xFF10261F, true);
+        ok.setText("دوس OK ✓");
+        ok.setPadding(dp(14), dp(8), dp(14), dp(8));
+        ok.setBackground(round(GOLD, 0, 16));
+        msgBar.addView(ok);
+        FrameLayout.LayoutParams mbl = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        mbl.setMargins(dp(60), 0, dp(60), dp(24));
+        overlay.addView(msgBar, mbl);
 
         banner = text(26, 0xFF10261F, true);
         banner.setBackgroundColor(GOLD);

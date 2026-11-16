@@ -104,6 +104,24 @@ public class MainActivity extends Activity {
     private LinearLayout famCard, pinCard, famStars;
     private TextView pinAddr;
     private ImageView pinQr, ntfyQr;
+    private FrameLayout popScrim;
+
+    private void showPopup(View card) {
+        pinCard.setVisibility(card == pinCard ? View.VISIBLE : View.GONE);
+        testCard.setVisibility(card == testCard ? View.VISIBLE : View.GONE);
+        popScrim.setVisibility(View.VISIBLE);
+        popScrim.bringToFront();
+        popScrim.setAlpha(0f);
+        popScrim.animate().alpha(1f).setDuration(200).start();
+    }
+
+    private void hidePopups() {
+        handler.removeCallbacks(hidePin);
+        pinCard.setVisibility(View.GONE);
+        testCard.setVisibility(View.GONE);
+        popScrim.setVisibility(View.GONE);
+        if (firstCard != null) firstCard.requestFocus();
+    }
     private LinearLayout testCard;
     private final TextView[] pinDigits = new TextView[4];
     private int duaIndex = 0;
@@ -207,12 +225,8 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK && testCard.getVisibility() == View.VISIBLE) {
-            testCard.setVisibility(View.GONE);
-            return true;
-        }
-        if (keyCode == KeyEvent.KEYCODE_BACK && pinCard.getVisibility() == View.VISIBLE) {
-            pinCard.setVisibility(View.GONE);
+        if (keyCode == KeyEvent.KEYCODE_BACK && popScrim.getVisibility() == View.VISIBLE) {
+            hidePopups();
             return true;
         }
         if (keyCode == KeyEvent.KEYCODE_BACK && mushaf.getVisibility() == View.VISIBLE) {
@@ -469,19 +483,15 @@ public class MainActivity extends Activity {
         String addr = PhotoServer.address();
         pinAddr.setText(addr != null ? addr : "التليفزيون مش متوصل بالواي فاي");
         String pin = PhotoServer.pin(this);
-        testCard.setVisibility(View.GONE);
         if (addr != null) pinQr.setImageBitmap(qr(addr + "/?pin=" + pin, dp(140)));
         ntfyQr.setImageBitmap(qr(Ntfy.url(this), dp(140)));
         for (int i = 0; i < 4; i++) pinDigits[i].setText(String.valueOf(pin.charAt(i)));
-        pinCard.setVisibility(View.VISIBLE);
-        pinCard.setAlpha(0f);
-        pinCard.setTranslationY(-dp(10));
-        pinCard.animate().alpha(1f).translationY(0).setDuration(250).start();
+        showPopup(pinCard);
         handler.removeCallbacks(hidePin);
         handler.postDelayed(hidePin, 60_000);
     }
 
-    private final Runnable hidePin = () -> pinCard.setVisibility(View.GONE);
+    private final Runnable hidePin = this::hidePopups;
 
     private static Bitmap decode(File f, int max) {
         BitmapFactory.Options o = new BitmapFactory.Options();
@@ -745,12 +755,11 @@ public class MainActivity extends Activity {
         TextView photosPill = pill("📱  صفحة الموبايل");
         TextView testPill = pill("🧪  جرّب");
         testPill.setOnClickListener(v -> {
-            pinCard.setVisibility(View.GONE);
-            testCard.setVisibility(testCard.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-            if (testCard.getVisibility() == View.VISIBLE) testCard.getChildAt(1).requestFocus();
+            showPopup(testCard);
+            testCard.getChildAt(1).requestFocus();
         });
         photosPill.setOnClickListener(v -> {
-            if (pinCard.getVisibility() == View.VISIBLE) pinCard.setVisibility(View.GONE); else showPinCard();
+            if (pinCard.getVisibility() == View.VISIBLE) hidePopups(); else showPinCard();
         });
         overlayPill = pill("🔔  فعّل الأذان فوق التطبيقات");
         overlayPill.setOnClickListener(v -> askOverlay());
@@ -769,8 +778,7 @@ public class MainActivity extends Activity {
         FrameLayout under = new FrameLayout(this);
         under.setClipChildren(false);
         under.addView(buildPhotoFrame());
-        under.addView(buildPinCard(), new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
-        under.addView(buildTestCard(), new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
+
         leftCol.addView(under, endAligned());
         FrameLayout.LayoutParams llp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
         llp.setMargins(dp(44), dp(28), dp(44), 0);
@@ -840,6 +848,15 @@ public class MainActivity extends Activity {
         banner.setPadding(dp(24), dp(16), dp(24), dp(16));
         banner.setVisibility(View.GONE);
         overlay.addView(banner, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+
+        // popups (QR / try menu): centered, above everything, the screen dims behind them
+        popScrim = new FrameLayout(this);
+        popScrim.setBackgroundColor(0xB3000000);
+        popScrim.setClickable(true);
+        popScrim.setVisibility(View.GONE);
+        popScrim.addView(buildPinCard(), new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        popScrim.addView(buildTestCard(), new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        overlay.addView(popScrim, new FrameLayout.LayoutParams(-1, -1));
         return root;
     }
 
@@ -962,7 +979,7 @@ public class MainActivity extends Activity {
                 ((TextView) v).setTextColor(has ? 0xFF10261F : WHITE);
             });
             Runnable r = (Runnable) it[1];
-            b.setOnClickListener(v -> { testCard.setVisibility(View.GONE); r.run(); });
+            b.setOnClickListener(v -> { hidePopups(); r.run(); });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(210), -2);
             lp.setMargins(0, dp(4), 0, dp(4));
             testCard.addView(b, lp);

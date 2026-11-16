@@ -134,6 +134,7 @@ public class JuzAmmaActivity extends Activity {
     // ---------- reading ----------
 
     private void startSurah(int idx) {
+        handler.removeCallbacks(autoNext);
         surahIdx = idx;
         prefs().edit().putInt("last_" + juzIdx, idx).apply();
         picker.setVisibility(View.GONE);
@@ -231,13 +232,28 @@ public class JuzAmmaActivity extends Activity {
         card.setVisibility(View.GONE);
         dots.removeAllViews();
         step.setText("");
-        celebrate.setText("🌟 أحسنتِ! 🌟\nخلّصنا سورة " + surahName(surahIdx) + "\n\nOK: نعيدها   •   ⏭: السورة اللي بعدها");
+        int next = nextSurah();
+        celebrate.setText(next >= 0
+                ? "🌟 أحسنتِ! 🌟\nخلّصنا سورة " + surahName(surahIdx) + "\n\nوبعدها على طول: سورة " + surahName(next) + " ⏳\nOK: نعيد اللي فاتت"
+                : "🌟 أحسنتِ! 🌟\nخلّصنا الجزء كله! 🏆\n\nOK: نعيد آخر سورة");
         celebrate.setVisibility(View.VISIBLE);
         celebrate.setScaleX(0.6f); celebrate.setScaleY(0.6f);
         celebrate.animate().scaleX(1f).scaleY(1f).setDuration(500).start();
         Chime.play();
         pauseBtn.setText("↻");
+        if (next >= 0) handler.postDelayed(autoNext, 6000);
     }
+
+    /** Continues by itself to the next surah of the juz (Juz Amma goes An-Nas → An-Naba). */
+    private int nextSurah() {
+        int next = kidsOrder() ? surahIdx - 1 : surahIdx + 1;
+        return next >= 0 && next < surahs.length() ? next : -1;
+    }
+
+    private final Runnable autoNext = () -> {
+        int next = nextSurah();
+        if (done && next >= 0 && reader.getVisibility() == View.VISIBLE) startSurah(next);
+    };
 
     private void updateDots(int r) {
         dots.removeAllViews();
@@ -266,8 +282,8 @@ public class JuzAmmaActivity extends Activity {
 
     private void jump(int delta) {
         if (done) {
-            int next = kidsOrder() ? surahIdx - 1 : surahIdx + 1; // Juz Amma: An-Nas → An-Naba
-            if (delta > 0 && next >= 0 && next < surahs.length()) startSurah(next);
+            int next = nextSurah();
+            if (delta > 0 && next >= 0) startSurah(next);
             return;
         }
         int a = Math.max(1, Math.min(ayat().length(), ayah + delta));
@@ -276,6 +292,7 @@ public class JuzAmmaActivity extends Activity {
 
     private void stopAudio() {
         handler.removeCallbacks(watch);
+        if (!done) handler.removeCallbacks(autoNext);
         if (mp != null) { try { mp.release(); } catch (Exception ignored) { } mp = null; }
     }
 

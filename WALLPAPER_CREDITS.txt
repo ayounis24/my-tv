@@ -1,0 +1,30 @@
+wp_fajr_1.jpg  (your photo)
+wp_fajr_2.jpg  (your photo)
+wp_fajr_3.jpg  https://commons.wikimedia.org/wiki/File:Desert_canyon_(3344010623).jpg
+wp_fajr_4.jpg  https://commons.wikimedia.org/wiki/File:KAFD_seen_from_North_east_side_of_Riyadh_City.jpg
+wp_fajr_5.jpg  https://commons.wikimedia.org/wiki/File:Majdoul_Tower_Riyadh_Saudi_Arabia_027.jpg
+wp_dhuhr_1.jpg  (your photo)
+wp_dhuhr_2.jpg  (your photo)
+wp_dhuhr_3.jpg  https://commons.wikimedia.org/wiki/File:King_Abdullah_Financial_District_20230411_114859.jpg
+wp_dhuhr_4.jpg  https://commons.wikimedia.org/wiki/File:Rawdah_(The_Green_Dome)_front.jpg
+wp_dhuhr_5.jpg  https://commons.wikimedia.org/wiki/File:Jeddah_Waterfront,_Western_Saudi_Arabia_(2026).jpg
+wp_asr_1.jpg  https://commons.wikimedia.org/wiki/File:At-Turaif_District_in_ad-Dir'iyah_(12).jpg
+wp_asr_2.jpg  https://commons.wikimedia.org/wiki/File:At-Turaif_District_in_ad-Dir'iyah_(7).jpg
+wp_asr_3.jpg  https://commons.wikimedia.org/wiki/File:Saudi_Arabia_(6374669841).jpg
+wp_asr_4.jpg  https://commons.wikimedia.org/wiki/File:Tuwaiq.jpg
+wp_asr_5.jpg  https://commons.wikimedia.org/wiki/File:Diriyah_Gate_(2021).jpg
+wp_maghrib_1.jpg  (your photo)
+wp_maghrib_2.jpg  (your photo)
+wp_maghrib_3.jpg  https://commons.wikimedia.org/wiki/File:Riyadh_Skyline_showing_the_King_Abdullah_Financial_District_(KAFD)_and_the_famous_Kingdom_Tower_.jpg
+wp_maghrib_4.jpg  https://commons.wikimedia.org/wiki/File:Deraya.jpg
+wp_maghrib_5.jpg  https://commons.wikimedia.org/wiki/File:Hassan_Anani_Mosque,_Jeddah_Corniche.jpg
+wp_isha_1.jpg  (your photo)
+wp_isha_2.jpg  (your photo)
+wp_isha_3.jpg  https://commons.wikimedia.org/wiki/File:Riyadh_Skyline.jpg
+wp_isha_4.jpg  https://commons.wikimedia.org/wiki/File:Prophet's_Mosque_from_the_outside_(2022).jpg
+wp_isha_5.jpg  https://commons.wikimedia.org/wiki/File:Jeddah_at_Night.jpg
+wp_night_1.jpg  (your photo)
+wp_night_2.jpg  https://commons.wikimedia.org/wiki/File:King_Abdullah_Financial_District_(KAFD),_Riyadh,_Saudi_Arabia,_2026.jpg
+wp_night_3.jpg  https://commons.wikimedia.org/wiki/File:Riyadh_(315875552).jpg
+wp_night_4.jpg  https://commons.wikimedia.org/wiki/File:المسجد_النبوي_في_المدينة_المنورة،_ليلاً.jpg
+wp_night_5.jpg  https://commons.wikimedia.org/wiki/File:Reflection_of_Jeddah_Al-balad_Lake.jpg

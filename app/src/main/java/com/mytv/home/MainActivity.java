@@ -80,6 +80,7 @@ public class MainActivity extends Activity {
 
     private ImageView bgFront, bgBack;
     private String currentWallpaper = "";
+    private static final int WALLPAPERS = 5;
     private TextView greeting, clock, ampm, hijriLine, nextLine, gregLine, zikr, banner;
     private final TextView[] chipName = new TextView[6];
     private final TextView[] chipTime = new TextView[6];
@@ -345,11 +346,15 @@ public class MainActivity extends Activity {
         String left = remaining >= 60 ? String.format(Locale.US, "%d:%02d", remaining / 60, remaining % 60) : remaining + " دقيقة";
         nextLine.setText("🕌 " + PrayerTimes.NAMES[nextIdx] + " بعد " + left);
 
+        // 6 times of the day × 5 photos each; a new photo every 10 minutes
         String period;
-        if (nowMin >= t[1] && nowMin < t[3]) period = "morning";
-        else if (nowMin >= t[3] && nowMin < t[4] + 40) period = "evening";
-        else period = "night";
-        setWallpaper("wp_" + period + "_" + weather.condition);
+        if (nowMin >= t[0] && nowMin < t[1] + 30) period = "fajr";            // dawn → sunrise
+        else if (nowMin >= t[1] + 30 && nowMin < t[3]) period = "dhuhr";      // full daylight
+        else if (nowMin >= t[3] && nowMin < t[4] - 20) period = "asr";        // afternoon, warm light
+        else if (nowMin >= t[4] - 20 && nowMin < t[5]) period = "maghrib";    // sunset & dusk
+        else if (nowMin >= t[5]) period = "isha";                            // evening city lights
+        else period = "night";                                               // after midnight → Fajr
+        setWallpaper("wp_" + period + "_" + ((System.currentTimeMillis() / 600000L) % WALLPAPERS + 1));
 
         for (int i = 0; i < 6; i++) {
             String key = today + "-" + i;

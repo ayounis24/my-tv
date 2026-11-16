@@ -44,7 +44,7 @@ public class StarsActivity extends Activity {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
-        col.setPadding(dp(40), dp(22), dp(40), dp(18));
+        col.setPadding(dp(24), dp(22), dp(24), dp(18));
         col.addView(tv("⭐ نجوم البنات", 32, INK, true));
         TextView sub = tv("كل صلاة بنجمة  •  " + Stars.WEEK_GOAL + " نجمة في الأسبوع = تاج 👑  •  الأسبوع بيبدأ السبت", 15, 0xBB22314D, false);
         sub.setPadding(0, dp(2), 0, dp(14));
@@ -90,11 +90,11 @@ public class StarsActivity extends Activity {
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setGravity(Gravity.CENTER_HORIZONTAL);
-            card.setPadding(dp(18), dp(14), dp(18), dp(16));
+            card.setPadding(dp(10), dp(14), dp(10), dp(16));
             card.setBackground(round(0xF2FFFFFF, dp(26), color, dp(3)));
             card.setElevation(dp(8));
 
-            TextView name = tv((week >= Stars.WEEK_GOAL ? "👑 " : "") + girl, 28, 0xFFFFFFFF, true);
+            TextView name = tv((week >= Stars.WEEK_GOAL ? "👑 " : "") + girl, 24, 0xFFFFFFFF, true);
             name.setPadding(dp(22), dp(4), dp(22), dp(4));
             name.setBackground(round(color, dp(20), 0, 0));
             name.setShadowLayer(4, 0, 1, 0x44000000);
@@ -108,10 +108,10 @@ public class StarsActivity extends Activity {
                 LinearLayout cell = new LinearLayout(this);
                 cell.setOrientation(LinearLayout.VERTICAL);
                 cell.setGravity(Gravity.CENTER);
-                cell.setPadding(dp(4), dp(6), dp(4), dp(6));
+                cell.setPadding(dp(2), dp(6), dp(2), dp(6));
                 cell.setFocusable(true);
                 cell.setClickable(true);
-                TextView star = tv(on ? "⭐" : "☆", 34, on ? 0xFFFFB400 : (due ? 0xFF9AA5B8 : 0x449AA5B8), false);
+                TextView star = tv(on ? "⭐" : "☆", 28, on ? 0xFFFFB400 : (due ? 0xFF9AA5B8 : 0x449AA5B8), false);
                 TextView pn = tv(Stars.PRAYERS[p], 12, due ? INK : 0x6622314D, true);
                 cell.addView(star);
                 cell.addView(pn);
@@ -126,7 +126,7 @@ public class StarsActivity extends Activity {
                     Stars.set(this, girl, pi, true);
                     hint.setText("ما شاء الله يا " + girl + " ⭐ ربنا يتقبّل");
                 });
-                row.addView(cell, new LinearLayout.LayoutParams(dp(58), -2));
+                row.addView(cell, new LinearLayout.LayoutParams(dp(48), -2));
                 if (g == focusGirl && p == focusPrayer) toFocus = cell;
                 if (toFocus == null && g == 0 && p == 0) toFocus = cell;
             }
@@ -136,7 +136,7 @@ public class StarsActivity extends Activity {
             pb.setMax(Stars.WEEK_GOAL);
             pb.setProgress(Math.min(week, Stars.WEEK_GOAL));
             pb.setProgressTintList(android.content.res.ColorStateList.valueOf(color));
-            card.addView(pb, new LinearLayout.LayoutParams(dp(250), dp(10)));
+            card.addView(pb, new LinearLayout.LayoutParams(-1, dp(10)));
             card.addView(tv("الأسبوع: " + week + " من " + Stars.WEEK_GOAL + (week >= Stars.WEEK_GOAL ? "  👑" : ""), 15, INK, true));
 
             LinearLayout days = new LinearLayout(this);
@@ -152,13 +152,13 @@ public class StarsActivity extends Activity {
                 dc.addView(dn, new LinearLayout.LayoutParams(dp(26), dp(26)));
                 dc.addView(tv(DAYS[i], 11, 0x9922314D, false));
                 LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-2, -2);
-                dl.setMargins(dp(3), 0, dp(3), 0);
+                dl.setMargins(dp(2), 0, dp(2), 0);
                 days.addView(dc, dl);
             }
             card.addView(days);
 
             LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1);
-            cl.setMargins(dp(10), 0, dp(10), 0);
+            cl.setMargins(dp(6), 0, dp(6), 0);
             board.addView(card, cl);
         }
         if (toFocus != null) toFocus.requestFocus();

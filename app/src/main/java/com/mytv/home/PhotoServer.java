@@ -63,6 +63,7 @@ public final class PhotoServer {
     }
 
     public static synchronized void start(Context ctx) {
+        Ntfy.start(ctx);
         if (started) return;
         started = true;
         Context app = ctx.getApplicationContext();
@@ -164,6 +165,8 @@ public final class PhotoServer {
                 send(out, 200, "application/json; charset=utf-8", Stars.status(c).toString().getBytes(StandardCharsets.UTF_8));
             } else if (path.equals("/stars")) {
                 send(out, 200, "application/json; charset=utf-8", Stars.status(c).toString().getBytes(StandardCharsets.UTF_8));
+            } else if (path.equals("/ntfy")) {
+                send(out, 200, "text/plain; charset=utf-8", Ntfy.url(c).getBytes(StandardCharsets.UTF_8));
             } else if (path.equals("/msg-status")) {
                 send(out, 200, "application/json; charset=utf-8", Messages.current(c).toString().getBytes(StandardCharsets.UTF_8));
             } else if (method.equals("POST") && path.equals("/family")) {
@@ -235,7 +238,9 @@ public final class PhotoServer {
             + "<textarea id=mt rows=3 maxlength=300 placeholder='اكتب رسالتك…' style='width:100%;box-sizing:border-box;border-radius:12px;border:0;padding:12px;font-size:18px'></textarea>"
             + "<div id=qk style='display:flex;flex-wrap:wrap;gap:6px;margin:8px 0'></div>"
             + "<button id=ms style='background:#e8c35a;color:#10261f;border:0;border-radius:12px;padding:14px;font-size:18px;font-weight:bold;width:100%'>إبعت 💌</button>"
-            + "<div id=mst style='margin-top:10px;color:#e8c35a'></div></fieldset>"
+            + "<div id=mst style='margin-top:10px;color:#e8c35a'></div>"
+            + "<p style='margin:14px 0 0;font-size:14px'>🌍 <b>وإنت برّه البيت:</b> افتح <a id=nl style='color:#e8c35a'></a> واحفظها، أو نزّل تطبيق <b>ntfy</b> واشترك في نفس القناة. "
+            + "ولو الرسالة من ماما اكتب «ماما» في خانة العنوان (Title).</p></fieldset>"
             + "<fieldset><legend>⭐ نجوم البنات النهارده</legend><div id=sg></div><small>دوس على الصلاة عشان تدّي النجمة أو تلغيها.</small></fieldset>"
             + "<label>➕ ضيف صور<input id=f type=file accept='image/*' multiple></label><div id=st></div><div id=g></div>"
             + "<fieldset><legend>🔊 صوت الأذان</legend><small id=as>…</small>"
@@ -288,6 +293,7 @@ public final class PhotoServer {
             + "ms.onclick=async()=>{const t=mt.value.trim();if(!t)return;ms.disabled=true;"
             + "await fetch(q('/msg'),{method:'POST',body:JSON.stringify({from:who,text:t})});mt.value='';ms.disabled=false;mstat()};"
             + "setInterval(mstat,3000);"
+            + "fetch(q('/ntfy')).then(r=>r.text()).then(u=>{nl.href=u;nl.textContent=u.replace('https://','')});"
             + "const PR=['الفجر','الظهر','العصر','المغرب','العشاء'];"
             + "function drawStars(j){if(!j.girls||!j.girls.length){sg.innerHTML='<small>ضيف أسامي البنات في جزء العيلة تحت.</small>';return}"
             + "sg.innerHTML='';j.girls.forEach(g=>{const r=document.createElement('div');r.style.margin='0 0 14px';"

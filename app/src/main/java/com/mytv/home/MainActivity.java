@@ -103,7 +103,7 @@ public class MainActivity extends Activity {
     private TextView photoHint, famTitle, famKids, famDua;
     private LinearLayout famCard, pinCard, famStars;
     private TextView pinAddr;
-    private ImageView pinQr;
+    private ImageView pinQr, ntfyQr;
     private LinearLayout testCard;
     private final TextView[] pinDigits = new TextView[4];
     private int duaIndex = 0;
@@ -470,7 +470,8 @@ public class MainActivity extends Activity {
         pinAddr.setText(addr != null ? addr : "التليفزيون مش متوصل بالواي فاي");
         String pin = PhotoServer.pin(this);
         testCard.setVisibility(View.GONE);
-        if (addr != null) pinQr.setImageBitmap(qr(addr + "/?pin=" + pin, dp(170)));
+        if (addr != null) pinQr.setImageBitmap(qr(addr + "/?pin=" + pin, dp(140)));
+        ntfyQr.setImageBitmap(qr(Ntfy.url(this), dp(140)));
         for (int i = 0; i < 4; i++) pinDigits[i].setText(String.valueOf(pin.charAt(i)));
         pinCard.setVisibility(View.VISIBLE);
         pinCard.setAlpha(0f);
@@ -982,46 +983,78 @@ public class MainActivity extends Activity {
         pinCard = new LinearLayout(this);
         pinCard.setOrientation(LinearLayout.VERTICAL);
         pinCard.setGravity(Gravity.CENTER_HORIZONTAL);
-        pinCard.setPadding(dp(20), dp(14), dp(20), dp(16));
+        pinCard.setPadding(dp(20), dp(14), dp(20), dp(14));
         pinCard.setBackground(round(0xF20B1A22, 0x88E8C35A, 18));
         pinCard.setElevation(dp(20));
         pinCard.setVisibility(View.GONE);
         TextView t = text(16, GOLD, true);
-        t.setText("📱 صفحة الموبايل");
+        t.setText("📱 وجّه كاميرا الآيفون على الكود");
+        t.setPadding(0, 0, 0, dp(10));
         pinCard.addView(t);
-        TextView t2 = text(12, SOFT, false);
-        t2.setText("الرسايل، والنجوم، والصور، والأذان، والعيلة");
-        pinCard.addView(t2);
-        TextView s0 = text(14, WHITE, true);
-        s0.setText("وجّه كاميرا الآيفون على الكود 👇");
-        s0.setPadding(0, dp(10), 0, dp(6));
-        pinCard.addView(s0);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.TOP);
+
+        // 🏠 at home: the full page (messages, stars, photos, adhan, family)
+        LinearLayout home = new LinearLayout(this);
+        home.setOrientation(LinearLayout.VERTICAL);
+        home.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView h1 = text(14, WHITE, true);
+        h1.setText("🏠 من البيت");
+        home.addView(h1);
+        TextView h2 = text(11, DIM, false);
+        h2.setText("كل حاجة: رسايل ونجوم وصور");
+        h2.setPadding(0, 0, 0, dp(6));
+        home.addView(h2);
         pinQr = new ImageView(this);
         pinQr.setBackgroundColor(0xFFFFFFFF);
-        pinQr.setPadding(dp(8), dp(8), dp(8), dp(8));
-        pinCard.addView(pinQr, new LinearLayout.LayoutParams(dp(186), dp(186)));
-        TextView s1 = text(12, DIM, false);
-        s1.setText("أو افتح من Safari وإنت على واي فاي البيت:");
-        s1.setPadding(0, dp(8), 0, dp(2));
-        pinCard.addView(s1);
-        pinAddr = text(17, WHITE, true);
+        pinQr.setPadding(dp(6), dp(6), dp(6), dp(6));
+        home.addView(pinQr, new LinearLayout.LayoutParams(dp(150), dp(150)));
+        pinAddr = text(12, SOFT, true);
         pinAddr.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-        pinCard.addView(pinAddr);
-        TextView s2 = text(12, DIM, false);
-        s2.setText("واكتب الرقم السري");
-        s2.setPadding(0, dp(10), 0, dp(6));
-        pinCard.addView(s2);
+        pinAddr.setPadding(0, dp(6), 0, dp(4));
+        home.addView(pinAddr);
         LinearLayout digits = new LinearLayout(this);
         digits.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
         for (int i = 0; i < 4; i++) {
-            TextView d = text(24, 0xFF10261F, true);
-            d.setBackground(round(GOLD, 0, 10));
-            LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(dp(40), dp(48));
-            dl.setMargins(dp(4), 0, dp(4), 0);
+            TextView d = text(18, 0xFF10261F, true);
+            d.setBackground(round(GOLD, 0, 8));
+            LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(dp(28), dp(34));
+            dl.setMargins(dp(3), 0, dp(3), 0);
             digits.addView(d, dl);
             pinDigits[i] = d;
         }
-        pinCard.addView(digits);
+        home.addView(digits);
+        row.addView(home);
+
+        View sep = new View(this);
+        sep.setBackgroundColor(0x33E8C35A);
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(dp(1), dp(220));
+        sl.setMargins(dp(18), 0, dp(18), 0);
+        row.addView(sep, sl);
+
+        // 🌍 from anywhere: ntfy channel, messages only
+        LinearLayout away = new LinearLayout(this);
+        away.setOrientation(LinearLayout.VERTICAL);
+        away.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView a1 = text(14, WHITE, true);
+        a1.setText("🌍 من أي مكان");
+        away.addView(a1);
+        TextView a2 = text(11, DIM, false);
+        a2.setText("رسايل بس، حتى وإنت برّه");
+        a2.setPadding(0, 0, 0, dp(6));
+        away.addView(a2);
+        ntfyQr = new ImageView(this);
+        ntfyQr.setBackgroundColor(0xFFFFFFFF);
+        ntfyQr.setPadding(dp(6), dp(6), dp(6), dp(6));
+        away.addView(ntfyQr, new LinearLayout.LayoutParams(dp(150), dp(150)));
+        TextView a3 = text(11, SOFT, false);
+        a3.setText("اكتب الرسالة ودوس إرسال\nولو من ماما: اكتب «ماما» في العنوان");
+        a3.setPadding(0, dp(6), 0, 0);
+        away.addView(a3);
+        row.addView(away);
+        pinCard.addView(row);
+
         TextView s3 = text(11, DIM, false);
         s3.setText("بيختفي لوحده بعد دقيقة  •  رجوع للإغلاق");
         s3.setPadding(0, dp(10), 0, 0);

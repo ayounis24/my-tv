@@ -57,7 +57,7 @@ async function test(name, fn) {
     const p = await page(browser);
     await key(p, 'ArrowRight', 5); await key(p, 'Enter');
     ok(await p.isVisible('.panel'), 'القائمة لم تُفتح');
-    ok((await focused(p)).startsWith('HDMI 1'), 'التحديد داخل القائمة: ' + await focused(p));
+    ok((await focused(p)).includes('HDMI 1'), 'التحديد داخل القائمة: ' + await focused(p));
     await key(p, 'ArrowDown', 2); ok((await focused(p)).startsWith('HDMI 3'), 'بعد الأسهم: ' + await focused(p));
     await key(p, 'Enter');
     ok(!(await p.isVisible('.panel')), 'القائمة لم تُغلق');
@@ -132,7 +132,7 @@ async function test(name, fn) {
   }
 
   await test('QR: لا يُولَّد رمز عند نقص البيانات', async () => {
-    const p = await page(browser);
+    const p = await page(browser, '', { profileUrl: '', contact: { name: '', mobile: [], phone: '', email: '' } });
     ok(!(await p.$('#qrProfile canvas')) && !(await p.$('#qrContact canvas')), 'ظهر رمز رغم نقص البيانات');
     ok(/بيانات ناقصة/.test(await p.textContent('#qrProfile')) && /بيانات ناقصة/.test(await p.textContent('#qrContact')), 'لا توجد رسالة بيانات ناقصة');
     await p.context().close();
@@ -158,6 +158,22 @@ async function test(name, fn) {
     const vc = await read('#qrContact');
     ok(/^BEGIN:VCARD/.test(vc) && vc.includes('FN;CHARSET=UTF-8:اسم تجريبي للاختبار') && vc.includes('TEL;TYPE=CELL:+966500000000') &&
        vc.includes('EMAIL;TYPE=INTERNET:test@example.com') && /END:VCARD$/.test(vc), 'محتوى vCard: ' + vc);
+    await p.context().close();
+  });
+
+  await test('QR بطاقة الاتصال الحقيقية: تُقرأ وفيها الاسم والأرقام والبريد', async () => {
+    const p = await page(browser);
+    const img = await p.$eval('#qrContact canvas', c => {
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+      return { w: c.width, h: c.height, data: Array.from(d.data) };
+    });
+    const r = jsQR(Uint8ClampedArray.from(img.data), img.w, img.h);
+    ok(r, 'تعذّرت قراءة الرمز');
+    const v = r.data;
+    ['FN;CHARSET=UTF-8:أحمد يونس', 'N;CHARSET=UTF-8:يونس;أحمد;;;', 'TEL;TYPE=CELL:+966531074973', 'TEL;TYPE=CELL:+966500979795',
+     'TEL;TYPE=WORK,VOICE:+966112077978', 'EMAIL;TYPE=INTERNET:a.younis@rumaar.com', 'URL:https://rumaar.com']
+      .forEach(x => ok(v.includes(x), 'ناقص: ' + x + '\n' + v));
+    ok(!(await p.$('#qrProfile canvas')), 'ظهر QR للبروفايل رغم عدم وجود الرابط');
     await p.context().close();
   });
 

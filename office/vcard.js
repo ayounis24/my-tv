@@ -6,12 +6,16 @@
   function build(c) {
     var missing = [];
     if (!c.name) missing.push('الاسم');
-    if (!c.mobile && !c.phone && !c.email) missing.push('رقم هاتف أو بريد');
+    var mobiles = [].concat(c.mobile || []).filter(Boolean);
+    if (!mobiles.length && !c.phone && !c.email) missing.push('رقم هاتف أو بريد');
     if (missing.length) return { ok: false, missing: missing };
-    var L = ['BEGIN:VCARD', 'VERSION:3.0', 'N;CHARSET=UTF-8:' + esc(c.name) + ';;;;', 'FN;CHARSET=UTF-8:' + esc(c.name)];
+    var parts = String(c.name).trim().split(/\s+/);
+    var family = parts.length > 1 ? parts.pop() : '', given = parts.join(' ');
+    var L = ['BEGIN:VCARD', 'VERSION:3.0', 'N;CHARSET=UTF-8:' + esc(family) + ';' + esc(given) + ';;;', 'FN;CHARSET=UTF-8:' + esc(c.name)];
+    if (c.nameEn) L.push('NICKNAME:' + esc(c.nameEn));
     if (c.org) L.push('ORG;CHARSET=UTF-8:' + esc(c.org));
     if (c.title) L.push('TITLE;CHARSET=UTF-8:' + esc(c.title));
-    if (c.mobile) L.push('TEL;TYPE=CELL:' + c.mobile.replace(/\s/g, ''));
+    mobiles.forEach(function (m) { L.push('TEL;TYPE=CELL:' + String(m).replace(/\s/g, '')); });
     if (c.phone) L.push('TEL;TYPE=WORK,VOICE:' + c.phone.replace(/\s/g, ''));
     if (c.email) L.push('EMAIL;TYPE=INTERNET:' + c.email);
     if (c.website) L.push('URL:' + c.website);

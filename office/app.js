@@ -325,13 +325,15 @@
   function showShareInfo() {
     var l = newLayer(); showLayer(l);
     var ss = cfg.screenShare || {};
+    var native = ss.mode === 'native';
     messageCard(l, {
       icon: 'share', title: 'مشاركة شاشة اللابتوب',
-      note: 'غير مهيأة بعد: عرض المشاركة داخل هذه اللوحة يحتاج جهاز استقبال لاسلكي موصولًا بأحد مداخل HDMI. ' +
-        'ميزة Screen Share المدمجة في الشاشة تعمل بملء الشاشة من قائمة المداخل في الريموت، ولا يمكن تشغيلها من هذه الواجهة.',
+      note: native
+        ? 'اللابتوب يتصل بالشاشة لاسلكيًا عبر الشبكة (ميزة الشاشة المدمجة)، ويظهر بملء الشاشة خارج هذه اللوحة. زر الشاشة لا يبدأ المشاركة؛ تبدأ من اللابتوب. لعرضها داخل اللوحة يلزم جهاز استقبال على HDMI.'
+        : 'غير مهيأة بعد: عرض المشاركة داخل هذه اللوحة يحتاج جهاز استقبال لاسلكي موصولًا بأحد مداخل HDMI.',
       steps: (ss.laptopSteps && ss.laptopSteps.length) ? ss.laptopSteps : null
     });
-    setChip('error', 'share', 'مشاركة الشاشة — غير مهيأة');
+    setChip(native ? 'info' : 'error', 'share', native ? 'مشاركة اللابتوب — تبدأ من اللابتوب وتظهر بملء الشاشة' : 'مشاركة الشاشة — غير مهيأة');
     setStrip(null);
     current = { kind: 'shareInfo' };
   }
@@ -415,7 +417,9 @@
         p.insertAdjacentHTML('beforeend', '<div class="panel__sub" style="margin-top:1rem">على اللابتوب:</div><ol class="msg-card__steps" style="margin:0">' +
           steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>');
       } else {
-        p.appendChild(item('share', 'كيف تعمل المشاركة داخل اللوحة؟', 'غير مهيأة — تحتاج جهاز استقبال على HDMI', null, function () {
+        var native = ss.mode === 'native';
+        p.appendChild(item('share', native ? 'خطوات المشاركة من اللابتوب' : 'كيف تعمل المشاركة داخل اللوحة؟',
+          native ? 'لاسلكي عبر الشبكة • يظهر بملء الشاشة' : 'غير مهيأة — تحتاج جهاز استقبال على HDMI', null, function () {
           closePanel(); setSource({ kind: 'shareInfo' });
         }));
       }
@@ -464,9 +468,10 @@
     var c = cfg.contact || {};
     if (!c.name) m.push('اسم بطاقة الاتصال');
     if (!c.title) m.push('المنصب');
-    if (!c.mobile && !c.phone) m.push('رقم الهاتف');
+    if (![].concat(c.mobile || []).filter(Boolean).length && !c.phone) m.push('رقم الهاتف');
     if (!c.email) m.push('البريد الإلكتروني');
-    if (!(cfg.screenShare || {}).receiverPort) m.push('جهاز استقبال المشاركة ومدخله');
+    var ssc = cfg.screenShare || {};
+    if (!ssc.receiverPort && ssc.mode !== 'native') m.push('جهاز استقبال المشاركة ومدخله');
     if (!(cfg.media || []).some(function (x) { return x.type !== 'image'; })) m.push('فيديوهات/روابط YouTube');
     if (!cfg.brand.colorsApproved) m.push('اعتماد ألوان الهوية');
     return m;

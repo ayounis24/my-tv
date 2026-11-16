@@ -52,6 +52,7 @@ body { font-family: var(--font), 'Noto Sans Arabic', Tahoma, sans-serif; line-he
 .chip[data-state="live"] .chip__dot { background: var(--ok); }
 .chip[data-state="demo"] .chip__dot, .chip[data-state="checking"] .chip__dot, .chip[data-state="unverified"] .chip__dot { background: var(--warn); }
 .chip[data-state="error"] .chip__dot { background: var(--bad); }
+.chip[data-state="info"] .chip__dot { background: var(--muted); }
 
 /* شريط المشروع الاختياري */
 .strip { position: absolute; right: 0; left: 0; bottom: 0; padding: 4rem 2rem 1.4rem; background: linear-gradient(to top, rgba(0,0,0,.82), rgba(0,0,0,0)); z-index: 4; }

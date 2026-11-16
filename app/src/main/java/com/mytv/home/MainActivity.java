@@ -474,6 +474,8 @@ public class MainActivity extends Activity {
     private void fillDock() {
         dock.removeAllViews();
         firstCard = addCard(cardFace("📖", "المصحف", Player.RECITER, 0xFF6B4E16, 0xFF2E2108), v -> openMushaf());
+        addCard(cardFace("🌈", "جزء عمّ", "نحفظ مع الحصري", 0xFFFF8FB1, 0xFF7FC8F8),
+                v -> startActivity(new Intent(this, JuzAmmaActivity.class)));
 
         PackageManager pm = getPackageManager();
         List<ResolveInfo> apps = pm.queryIntentActivities(

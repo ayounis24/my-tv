@@ -53,6 +53,10 @@
             android:launchMode="singleTop"
             android:excludeFromRecents="true" />
 
+        <activity android:name=".JuzAmmaActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
         <receiver android:name=".AdhanReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

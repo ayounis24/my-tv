@@ -109,9 +109,11 @@ public class MainActivity extends Activity {
         focusSink.requestFocus();
     }
 
-    private final Runnable autoHideDock = () -> {
+    private final Runnable autoHideDock = this::autoHide;
+
+    private void autoHide() {
         if (mushaf.getVisibility() != View.VISIBLE && popScrim.getVisibility() != View.VISIBLE) hideDock();
-    };
+    }
     private View firstCard;
 
     // player bar

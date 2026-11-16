@@ -218,7 +218,7 @@ public class JuzAmmaActivity extends Activity {
             View d = new View(this);
             GradientDrawable g = new GradientDrawable();
             g.setShape(GradientDrawable.OVAL);
-            g.setColor(i <= r ? PALETTE[(ayah + i) % PALETTE.length] : 0x55FFFFFF);
+            g.setColor(i <= r ? PALETTE[(ayah + i) % PALETTE.length] : 0x2222314D);
             g.setStroke(dp(2), 0xFFFFFFFF);
             d.setBackground(g);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(22), dp(22));

@@ -57,6 +57,15 @@
             android:exported="false"
             android:screenOrientation="landscape" />
 
+        <activity android:name=".StarsActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <activity android:name=".CelebrateActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:excludeFromRecents="true" />
+
         <receiver android:name=".AdhanReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

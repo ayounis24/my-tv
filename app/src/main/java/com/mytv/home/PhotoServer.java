@@ -154,6 +154,16 @@ public final class PhotoServer {
                 if (text.length() > 300) text = text.substring(0, 300);
                 if (!text.isEmpty()) Messages.post(c, from, text);
                 send(out, 200, "text/plain", "ok".getBytes());
+            } else if (method.equals("POST") && path.equals("/stars")) {
+                byte[] body = new byte[Math.min(Math.max(length, 0), 2000)];
+                int got = 0;
+                while (got < body.length) { int r = in.read(body, got, body.length - got); if (r < 0) break; got += r; }
+                org.json.JSONObject j = new org.json.JSONObject(new String(body, 0, got, StandardCharsets.UTF_8));
+                int pr = j.optInt("p", -1);
+                if (pr >= 0 && pr < 5 && Stars.girls(c).contains(j.optString("girl"))) Stars.set(c, j.optString("girl"), pr, j.optBoolean("on"));
+                send(out, 200, "application/json; charset=utf-8", Stars.status(c).toString().getBytes(StandardCharsets.UTF_8));
+            } else if (path.equals("/stars")) {
+                send(out, 200, "application/json; charset=utf-8", Stars.status(c).toString().getBytes(StandardCharsets.UTF_8));
             } else if (path.equals("/msg-status")) {
                 send(out, 200, "application/json; charset=utf-8", Messages.current(c).toString().getBytes(StandardCharsets.UTF_8));
             } else if (method.equals("POST") && path.equals("/family")) {
@@ -226,6 +236,7 @@ public final class PhotoServer {
             + "<div id=qk style='display:flex;flex-wrap:wrap;gap:6px;margin:8px 0'></div>"
             + "<button id=ms style='background:#e8c35a;color:#10261f;border:0;border-radius:12px;padding:14px;font-size:18px;font-weight:bold;width:100%'>إبعت 💌</button>"
             + "<div id=mst style='margin-top:10px;color:#e8c35a'></div></fieldset>"
+            + "<fieldset><legend>⭐ نجوم البنات النهارده</legend><div id=sg></div><small>دوس على الصلاة عشان تدّي النجمة أو تلغيها.</small></fieldset>"
             + "<label>➕ ضيف صور<input id=f type=file accept='image/*' multiple></label><div id=st></div><div id=g></div>"
             + "<fieldset><legend>🔊 صوت الأذان</legend><small id=as>…</small>"
             + "<label style='margin:12px 0'>🎵 اختار ملف الأذان<input id=af type=file accept='audio/*,.mp3,.m4a,.aac,.wav'></label>"
@@ -260,7 +271,7 @@ public final class PhotoServer {
             + "async function fam(){const j=await (await fetch(q('/family'))).json();dad.value=j.dad||'';mom.value=j.mom||'';kids.value=(j.kids||[]).join('، ');girls.checked=!!j.girls}"
             + "sv.onclick=async()=>{const k=kids.value.split(/[,،]/).map(x=>x.trim()).filter(x=>x);"
             + "await fetch(q('/family'),{method:'POST',body:JSON.stringify({dad:dad.value.trim(),mom:mom.value.trim(),kids:k,girls:girls.checked})});"
-            + "document.getElementById('fs').textContent='اتحفظ ✅'};"
+            + "document.getElementById('fs').textContent='اتحفظ ✅';stars()};"
             + "async function ads(){const j=await (await fetch(q('/adhan-status'))).json();"
             + "document.getElementById('as').textContent=j.has?'متسجّل على التليفزيون ✅ ('+j.mb+' ميجا). تقدر تغيّره من هنا.':'لسه مفيش أذان، والتنبيه شغال بصوت عادي.'}"
             + "document.getElementById('af').onchange=async e=>{const f=e.target.files[0];if(!f)return;"
@@ -277,6 +288,16 @@ public final class PhotoServer {
             + "ms.onclick=async()=>{const t=mt.value.trim();if(!t)return;ms.disabled=true;"
             + "await fetch(q('/msg'),{method:'POST',body:JSON.stringify({from:who,text:t})});mt.value='';ms.disabled=false;mstat()};"
             + "setInterval(mstat,3000);"
-            + "load().then(fam).then(ads).then(mstat);"
+            + "const PR=['الفجر','الظهر','العصر','المغرب','العشاء'];"
+            + "function drawStars(j){if(!j.girls||!j.girls.length){sg.innerHTML='<small>ضيف أسامي البنات في جزء العيلة تحت.</small>';return}"
+            + "sg.innerHTML='';j.girls.forEach(g=>{const r=document.createElement('div');r.style.margin='0 0 14px';"
+            + "r.innerHTML='<b style=\"font-size:18px\">'+(j.week[g]>=j.goal?'👑 ':'')+g+'</b> <small>الأسبوع: '+j.week[g]+' من '+j.goal+'</small>';"
+            + "const row=document.createElement('div');row.style.cssText='display:flex;gap:6px;margin-top:6px';"
+            + "PR.forEach((p,i)=>{const on=j.today[g][i];const b=document.createElement('button');"
+            + "b.style.cssText='flex:1;border:0;border-radius:12px;padding:8px 2px;font-size:13px;'+(on?'background:#e8c35a;color:#10261f':'background:#ffffff1f;color:#f5f1e6')+(j.due[i]?'':';opacity:.45');"
+            + "b.innerHTML=(on?'⭐':'☆')+'<br>'+p;b.onclick=async()=>{drawStars(await (await fetch(q('/stars'),{method:'POST',body:JSON.stringify({girl:g,p:i,on:!on})})).json())};row.appendChild(b)});"
+            + "r.appendChild(row);sg.appendChild(r)})}"
+            + "async function stars(){try{drawStars(await (await fetch(q('/stars'))).json())}catch(x){}}"
+            + "load().then(fam).then(ads).then(mstat).then(stars);"
             + "</script></body></html>";
 }

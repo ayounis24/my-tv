@@ -101,7 +101,7 @@ public class MainActivity extends Activity {
     // family portraits (two fixed circles)
     private final ImageView[] portraits = new ImageView[2];
     private TextView photoHint, famTitle, famKids, famDua;
-    private LinearLayout famCard, pinCard;
+    private LinearLayout famCard, pinCard, famStars;
     private TextView pinAddr;
     private final TextView[] pinDigits = new TextView[4];
     private int duaIndex = 0;
@@ -117,7 +117,10 @@ public class MainActivity extends Activity {
     }
 
     private final BroadcastReceiver adhanNow = new BroadcastReceiver() {
-        @Override public void onReceive(Context c, Intent i) { tick(); }
+        @Override public void onReceive(Context c, Intent i) {
+            if (Stars.ACTION.equals(i.getAction())) refreshStars();
+            tick();
+        }
     };
 
     @Override
@@ -138,6 +141,7 @@ public class MainActivity extends Activity {
         Messages.hideOverlay(this);
         IntentFilter f = new IntentFilter(ACTION_ADHAN_NOW);
         f.addAction(Messages.ACTION);
+        f.addAction(Stars.ACTION);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(adhanNow, f, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(adhanNow, f);
         fillDock();
@@ -391,8 +395,8 @@ public class MainActivity extends Activity {
 
         String parents = dad.isEmpty() ? mom : mom.isEmpty() ? dad : dad + " و" + mom;
         famTitle.setText("🏡 بيت " + parents);
-        famKids.setText(kids.isEmpty() ? "" : String.join("  •  ", kids) + "  🤍");
-        famKids.setVisibility(kids.isEmpty() ? View.GONE : View.VISIBLE);
+        famKids.setVisibility(View.GONE);
+        refreshStars();
 
         String kidsAnd = joinAnd(kids);
         String them = girls ? "هن" : "هم";
@@ -410,6 +414,30 @@ public class MainActivity extends Activity {
         d.add("اللهم اجعل هذا البيت سكنًا ومودة ورحمة، واجمعنا في الفردوس الأعلى");
         String[] nd = d.toArray(new String[0]);
         if (!java.util.Arrays.equals(nd, familyDuas)) { familyDuas = nd; duaIndex = 0; famDua.setText(nd[0]); }
+    }
+
+    /** Today's prayer stars for each girl, under the photos (👑 when she has the week's crown). */
+    private void refreshStars() {
+        famStars.removeAllViews();
+        java.util.List<String> girls = Stars.girls(this);
+        famStars.setVisibility(girls.isEmpty() ? View.GONE : View.VISIBLE);
+        LocalDate today = Stars.today();
+        for (String g : girls) {
+            boolean[] d = Stars.day(this, today, g);
+            LinearLayout c = new LinearLayout(this);
+            c.setOrientation(LinearLayout.VERTICAL);
+            c.setGravity(Gravity.CENTER);
+            TextView n = text(13, 0xFFF3E3B5, true);
+            n.setText((Stars.week(this, g) >= Stars.WEEK_GOAL ? "👑 " : "") + g);
+            StringBuilder sb = new StringBuilder();
+            for (boolean b : d) sb.append(b ? "★" : "☆");
+            TextView st = text(14, GOLD, false);
+            st.setText(sb);
+            c.addView(n);
+            c.addView(st);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
+            famStars.addView(c, lp);
+        }
     }
 
     private static String joinAnd(java.util.List<String> names) {
@@ -476,6 +504,8 @@ public class MainActivity extends Activity {
         firstCard = addCard(cardFace("📖", "المصحف", Player.RECITER, 0xFF6B4E16, 0xFF2E2108), v -> openMushaf());
         addCard(cardFace("🌈", "جزء عمّ", "نحفظ مع الحصري", 0xFFFF8FB1, 0xFF7FC8F8),
                 v -> startActivity(new Intent(this, JuzAmmaActivity.class)));
+        addCard(cardFace("⭐", "نجوم البنات", "نجمة لكل صلاة", 0xFFFFC857, 0xFFFF9E6B),
+                v -> startActivity(new Intent(this, StarsActivity.class)));
 
         PackageManager pm = getPackageManager();
         List<ResolveInfo> apps = pm.queryIntentActivities(
@@ -827,6 +857,10 @@ public class MainActivity extends Activity {
         famDua.setLineSpacing(0, 1.15f);
         famCard.addView(famTitle);
         famCard.addView(famKids);
+        famStars = new LinearLayout(this);
+        famStars.setGravity(Gravity.CENTER);
+        famStars.setPadding(0, dp(4), 0, dp(6));
+        famCard.addView(famStars);
         famCard.addView(famDua);
         LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(dp(300), -2);
         fl.setMargins(0, dp(10), 0, 0);

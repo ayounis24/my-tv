@@ -103,6 +103,8 @@ public class MainActivity extends Activity {
     private TextView photoHint, famTitle, famKids, famDua;
     private LinearLayout famCard, pinCard, famStars;
     private TextView pinAddr;
+    private ImageView pinQr;
+    private LinearLayout testCard;
     private final TextView[] pinDigits = new TextView[4];
     private int duaIndex = 0;
     private TextView overlayPill;
@@ -205,6 +207,10 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && testCard.getVisibility() == View.VISIBLE) {
+            testCard.setVisibility(View.GONE);
+            return true;
+        }
         if (keyCode == KeyEvent.KEYCODE_BACK && pinCard.getVisibility() == View.VISIBLE) {
             pinCard.setVisibility(View.GONE);
             return true;
@@ -351,7 +357,7 @@ public class MainActivity extends Activity {
         File[] files = PhotoServer.photos(this);
         String addr = PhotoServer.address();
         boolean ready = files.length >= 1;
-        photoHint.setText("اضغط «📷 صور البيت» فوق عشان تضيف صوركم");
+        photoHint.setText("اضغط «📱 صفحة الموبايل» فوق عشان تضيف صوركم");
         photoHint.setVisibility(ready ? View.GONE : View.VISIBLE);
         refreshFamily();
         String key = "";
@@ -463,6 +469,8 @@ public class MainActivity extends Activity {
         String addr = PhotoServer.address();
         pinAddr.setText(addr != null ? addr : "التليفزيون مش متوصل بالواي فاي");
         String pin = PhotoServer.pin(this);
+        testCard.setVisibility(View.GONE);
+        if (addr != null) pinQr.setImageBitmap(qr(addr + "/?pin=" + pin, dp(170)));
         for (int i = 0; i < 4; i++) pinDigits[i].setText(String.valueOf(pin.charAt(i)));
         pinCard.setVisibility(View.VISIBLE);
         pinCard.setAlpha(0f);
@@ -502,8 +510,7 @@ public class MainActivity extends Activity {
     private void fillDock() {
         dock.removeAllViews();
         firstCard = addCard(cardFace("📖", "المصحف", Player.RECITER, 0xFF6B4E16, 0xFF2E2108), v -> openMushaf());
-        addCard(cardFace("🌈", "جزء عمّ", "نحفظ مع الحصري", 0xFFFF8FB1, 0xFF7FC8F8),
-                v -> startActivity(new Intent(this, JuzAmmaActivity.class)));
+        addCard(hifzFace(), v -> startActivity(new Intent(this, JuzAmmaActivity.class)));
         addCard(cardFace("⭐", "نجوم البنات", "نجمة لكل صلاة", 0xFFFFC857, 0xFFFF9E6B),
                 v -> startActivity(new Intent(this, StarsActivity.class)));
 
@@ -548,6 +555,21 @@ public class MainActivity extends Activity {
                 .setClassName(ri.activityInfo.packageName, ri.activityInfo.name)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         addCard(face, v -> { try { startActivity(launch); } catch (Exception ignored) { } });
+    }
+
+    /** The Mushaf on its stand, with «احفظ مع الحصري» under it. */
+    private View hifzFace() {
+        FrameLayout f = new FrameLayout(this);
+        ImageView iv = new ImageView(this);
+        iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        iv.setImageResource(R.drawable.card_hifz);
+        f.addView(iv, new FrameLayout.LayoutParams(-1, -1));
+        TextView t = text(14, 0xFFF3E3B5, true);
+        t.setText("احفظ مع الحصري");
+        t.setPadding(0, dp(3), 0, dp(4));
+        t.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[]{0xCC000000, 0x00000000}));
+        f.addView(t, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+        return f;
     }
 
     private View cardFace(String icon, String title, String sub, int c1, int c2) {
@@ -719,7 +741,13 @@ public class MainActivity extends Activity {
             try { startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
             catch (Exception ignored) { }
         });
-        TextView photosPill = pill("📷  صور البيت");
+        TextView photosPill = pill("📱  صفحة الموبايل");
+        TextView testPill = pill("🧪  جرّب");
+        testPill.setOnClickListener(v -> {
+            pinCard.setVisibility(View.GONE);
+            testCard.setVisibility(testCard.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+            if (testCard.getVisibility() == View.VISIBLE) testCard.getChildAt(1).requestFocus();
+        });
         photosPill.setOnClickListener(v -> {
             if (pinCard.getVisibility() == View.VISIBLE) pinCard.setVisibility(View.GONE); else showPinCard();
         });
@@ -729,6 +757,9 @@ public class MainActivity extends Activity {
         pills.addView(overlayPill);
         LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(-2, -2);
         op.setMarginStart(dp(10));
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
+        tp.setMarginStart(dp(10));
+        pills.addView(testPill, tp);
         pills.addView(photosPill, op);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, -2);
         sp.setMarginStart(dp(10));
@@ -738,6 +769,7 @@ public class MainActivity extends Activity {
         under.setClipChildren(false);
         under.addView(buildPhotoFrame());
         under.addView(buildPinCard(), new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
+        under.addView(buildTestCard(), new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
         leftCol.addView(under, endAligned());
         FrameLayout.LayoutParams llp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
         llp.setMargins(dp(44), dp(28), dp(44), 0);
@@ -878,6 +910,73 @@ public class MainActivity extends Activity {
         return col;
     }
 
+    /** QR code (ZXing) so the iPhone camera opens the phone page straight away, PIN included. */
+    private static Bitmap qr(String text, int size) {
+        try {
+            com.google.zxing.common.BitMatrix m = new com.google.zxing.qrcode.QRCodeWriter()
+                    .encode(text, com.google.zxing.BarcodeFormat.QR_CODE, size, size,
+                            java.util.Collections.singletonMap(com.google.zxing.EncodeHintType.MARGIN, 0));
+            Bitmap b = Bitmap.createBitmap(m.getWidth(), m.getHeight(), Bitmap.Config.RGB_565);
+            for (int y = 0; y < m.getHeight(); y++)
+                for (int x = 0; x < m.getWidth(); x++) b.setPixel(x, y, m.get(x, y) ? 0xFF0B1A22 : 0xFFFFFFFF);
+            return b;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** «🧪 جرّب»: try every feature right now from the remote. */
+    private View buildTestCard() {
+        testCard = new LinearLayout(this);
+        testCard.setOrientation(LinearLayout.VERTICAL);
+        testCard.setGravity(Gravity.CENTER_HORIZONTAL);
+        testCard.setPadding(dp(18), dp(14), dp(18), dp(16));
+        testCard.setBackground(round(0xF20B1A22, 0x88E8C35A, 18));
+        testCard.setElevation(dp(20));
+        testCard.setVisibility(View.GONE);
+        TextView t = text(16, GOLD, true);
+        t.setText("🧪 جرّب دلوقتي");
+        t.setPadding(0, 0, 0, dp(8));
+        testCard.addView(t);
+        Object[][] items = {
+                {"🕌  الأذان", (Runnable) () -> startActivity(new Intent(this, AdhanActivity.class)
+                        .putExtra(AdhanActivity.EXTRA_NAME, nextPrayerName()))},
+                {"☀️  أذكار الصباح", (Runnable) () -> AzkarActivity.open(this, true)},
+                {"🌙  أذكار المساء", (Runnable) () -> AzkarActivity.open(this, false)},
+                {"💌  رسالة تجريبية", (Runnable) () -> Messages.post(this, "dad", "رسالة تجريبية 🤍 لو شايفها يبقى كله تمام")},
+                {"🎉  الاحتفال", (Runnable) () -> {
+                    java.util.List<String> g = Stars.girls(this);
+                    CelebrateActivity.show(this, g.isEmpty() ? "يا بطلة" : g.get(0), false);
+                }},
+        };
+        for (Object[] it : items) {
+            TextView b = text(15, WHITE, true);
+            b.setText((String) it[0]);
+            b.setPadding(dp(18), dp(9), dp(18), dp(9));
+            b.setFocusable(true);
+            b.setClickable(true);
+            b.setBackground(round(0x22FFFFFF, 0, 14));
+            b.setOnFocusChangeListener((v, has) -> {
+                v.setBackground(round(has ? GOLD : 0x22FFFFFF, 0, 14));
+                ((TextView) v).setTextColor(has ? 0xFF10261F : WHITE);
+            });
+            Runnable r = (Runnable) it[1];
+            b.setOnClickListener(v -> { testCard.setVisibility(View.GONE); r.run(); });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(210), -2);
+            lp.setMargins(0, dp(4), 0, dp(4));
+            testCard.addView(b, lp);
+        }
+        return testCard;
+    }
+
+    private String nextPrayerName() {
+        LocalDateTime now = LocalDateTime.now(zone());
+        int[] t = prayer.minutesFor(now.toLocalDate());
+        int m = now.getHour() * 60 + now.getMinute();
+        for (int i = 0; i < 6; i++) if (PrayerTimes.IS_PRAYER[i] && t[i] > m) return PrayerTimes.NAMES[i];
+        return PrayerTimes.NAMES[0];
+    }
+
     /** Hidden until "📷 صور البيت" is pressed: the address to open on the phone and the 4-digit code. */
     private View buildPinCard() {
         pinCard = new LinearLayout(this);
@@ -887,11 +986,22 @@ public class MainActivity extends Activity {
         pinCard.setBackground(round(0xF20B1A22, 0x88E8C35A, 18));
         pinCard.setElevation(dp(20));
         pinCard.setVisibility(View.GONE);
-        TextView t = text(15, GOLD, true);
-        t.setText("📷 ضيف صوركم وأسامي العيلة");
+        TextView t = text(16, GOLD, true);
+        t.setText("📱 صفحة الموبايل");
         pinCard.addView(t);
+        TextView t2 = text(12, SOFT, false);
+        t2.setText("الرسايل، والنجوم، والصور، والأذان، والعيلة");
+        pinCard.addView(t2);
+        TextView s0 = text(14, WHITE, true);
+        s0.setText("وجّه كاميرا الآيفون على الكود 👇");
+        s0.setPadding(0, dp(10), 0, dp(6));
+        pinCard.addView(s0);
+        pinQr = new ImageView(this);
+        pinQr.setBackgroundColor(0xFFFFFFFF);
+        pinQr.setPadding(dp(8), dp(8), dp(8), dp(8));
+        pinCard.addView(pinQr, new LinearLayout.LayoutParams(dp(186), dp(186)));
         TextView s1 = text(12, DIM, false);
-        s1.setText("من موبايلك، على نفس الواي فاي، افتح:");
+        s1.setText("أو افتح من Safari وإنت على واي فاي البيت:");
         s1.setPadding(0, dp(8), 0, dp(2));
         pinCard.addView(s1);
         pinAddr = text(17, WHITE, true);

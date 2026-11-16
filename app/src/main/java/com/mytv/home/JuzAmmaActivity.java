@@ -32,7 +32,7 @@ import java.io.InputStream;
 import java.util.Locale;
 
 /**
- * Juz Amma for the girls: Sheikh Al-Husary (Al-Muallim) reads verse by verse,
+ * Memorize with Al-Husary (Juz Amma, Juz Tabarak): Sheikh Al-Husary (Al-Muallim) reads verse by verse,
  * each verse three times in a row, the verse big on screen. Audio from everyayah.com.
  */
 public class JuzAmmaActivity extends Activity {
@@ -41,6 +41,8 @@ public class JuzAmmaActivity extends Activity {
     private static final int[] PALETTE = {0xFFFF8FB1, 0xFF7FC8F8, 0xFFFFC857, 0xFF8BD3A6, 0xFFB79CED, 0xFFFF9E6B};
     private static final int INK = 0xFF22314D;
 
+    private JSONArray juzList;
+    private int juzIdx = 0;
     private JSONArray surahs;
     private String basmala;
     private float basmalaEnd;
@@ -55,6 +57,7 @@ public class JuzAmmaActivity extends Activity {
     private AudioFocusRequest focus;
 
     private FrameLayout picker, reader;
+    private TextView pickerTitle;
     private GridView grid;
     private TextView title, step, verse, nextVerse, pauseBtn, celebrate;
     private LinearLayout dots;
@@ -66,20 +69,45 @@ public class JuzAmmaActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         audio = (AudioManager) getSystemService(AUDIO_SERVICE);
         try {
-            InputStream in = getAssets().open("juz_amma.json");
+            InputStream in = getAssets().open("hifz.json");
             byte[] buf = new byte[in.available()];
             int r = 0; while (r < buf.length) { int k = in.read(buf, r, buf.length - r); if (k < 0) break; r += k; }
             in.close();
             JSONObject j = new JSONObject(new String(buf, "UTF-8"));
-            surahs = j.getJSONArray("surahs");
+            juzList = j.getJSONArray("juz");
+            surahs = juzList.getJSONObject(0).getJSONArray("surahs");
             basmala = j.getJSONArray("basmala").getString(0);
             basmalaEnd = (float) j.getJSONArray("basmala").getDouble(1);
         } catch (Exception e) { finish(); return; }
         Player p = Player.get(this);
         if (p.state == Player.State.PLAYING) p.togglePause();
         setContentView(buildUi());
+        showJuzPicker();
+    }
+
+    // ---------- choosing a juz ----------
+
+    private FrameLayout juzPicker;
+    private View firstJuz;
+
+    private void showJuzPicker() {
+        stopAudio();
+        reader.setVisibility(View.GONE);
+        picker.setVisibility(View.GONE);
+        juzPicker.setVisibility(View.VISIBLE);
+        if (firstJuz != null) firstJuz.requestFocus();
+    }
+
+    private void openJuz(int i) {
+        juzIdx = i;
+        surahs = juzList.optJSONObject(i).optJSONArray("surahs");
+        pickerTitle.setText("📖 " + juzList.optJSONObject(i).optString("name") + "  •  اختاري السورة");
+        ((BaseAdapter) grid.getAdapter()).notifyDataSetChanged();
+        juzPicker.setVisibility(View.GONE);
         showPicker();
     }
+
+    private boolean kidsOrder() { return juzList.optJSONObject(juzIdx).optInt("n") == 30; }
 
     private SharedPreferences prefs() { return getSharedPreferences("juz", Context.MODE_PRIVATE); }
 
@@ -89,14 +117,14 @@ public class JuzAmmaActivity extends Activity {
         stopAudio();
         reader.setVisibility(View.GONE);
         picker.setVisibility(View.VISIBLE);
-        int last = prefs().getInt("last", surahs.length() - 1);
+        int last = prefs().getInt("last_" + juzIdx, kidsOrder() ? surahs.length() - 1 : 0);
         grid.setSelection(gridPos(last));
         grid.requestFocus();
     }
 
-    /** The grid starts from An-Nas (how kids usually begin) and goes up to An-Naba. */
-    private int surahAt(int gridPos) { return surahs.length() - 1 - gridPos; }
-    private int gridPos(int idx) { return surahs.length() - 1 - idx; }
+    /** Juz Amma starts from An-Nas (how kids usually begin); other parts go in Mushaf order. */
+    private int surahAt(int gridPos) { return kidsOrder() ? surahs.length() - 1 - gridPos : gridPos; }
+    private int gridPos(int idx) { return kidsOrder() ? surahs.length() - 1 - idx : idx; }
 
     private String surahName(int idx) {
         int n = surahs.optJSONObject(idx).optInt("n");
@@ -107,7 +135,7 @@ public class JuzAmmaActivity extends Activity {
 
     private void startSurah(int idx) {
         surahIdx = idx;
-        prefs().edit().putInt("last", idx).apply();
+        prefs().edit().putInt("last_" + juzIdx, idx).apply();
         picker.setVisibility(View.GONE);
         reader.setVisibility(View.VISIBLE);
         celebrate.setVisibility(View.GONE);
@@ -237,7 +265,11 @@ public class JuzAmmaActivity extends Activity {
     }
 
     private void jump(int delta) {
-        if (done) { if (delta > 0 && surahIdx > 0) startSurah(surahIdx - 1); return; } // kids go An-Nas → An-Naba
+        if (done) {
+            int next = kidsOrder() ? surahIdx - 1 : surahIdx + 1; // Juz Amma: An-Nas → An-Naba
+            if (delta > 0 && next >= 0 && next < surahs.length()) startSurah(next);
+            return;
+        }
         int a = Math.max(1, Math.min(ayat().length(), ayah + delta));
         playVerse(a, 0);
     }
@@ -251,6 +283,7 @@ public class JuzAmmaActivity extends Activity {
     public boolean onKeyDown(int keyCode, KeyEvent e) {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (reader.getVisibility() == View.VISIBLE) { showPicker(); return true; }
+            if (picker.getVisibility() == View.VISIBLE) { showJuzPicker(); return true; }
             finish();
             return true;
         }
@@ -281,12 +314,13 @@ public class JuzAmmaActivity extends Activity {
 
         // --- surah picker
         picker = new FrameLayout(this);
+        picker.setVisibility(View.GONE);
         LinearLayout pc = new LinearLayout(this);
         pc.setOrientation(LinearLayout.VERTICAL);
         pc.setPadding(dp(50), dp(26), dp(50), dp(20));
-        TextView pt = tv("🌈 يلا نحفظ جزء عمّ", 32, INK, true);
-        pc.addView(pt);
-        TextView ps = tv("مع الشيخ الحصري  •  كل آية بتتكرر 3 مرات  •  اختاري السورة", 16, 0xCC22314D, false);
+        pickerTitle = tv("", 30, INK, true);
+        pc.addView(pickerTitle);
+        TextView ps = tv("مع الشيخ الحصري  •  كل آية بتتكرر 3 مرات  •  رجوع: الأجزاء", 16, 0xCC22314D, false);
         ps.setPadding(0, dp(4), 0, dp(16));
         pc.addView(ps);
         grid = new GridView(this);
@@ -312,6 +346,51 @@ public class JuzAmmaActivity extends Activity {
         pc.addView(grid, new LinearLayout.LayoutParams(-1, 0, 1));
         picker.addView(pc, new FrameLayout.LayoutParams(-1, -1));
         root.addView(picker, new FrameLayout.LayoutParams(-1, -1));
+
+        // --- juz picker
+        juzPicker = new FrameLayout(this);
+        LinearLayout jc = new LinearLayout(this);
+        jc.setOrientation(LinearLayout.VERTICAL);
+        jc.setGravity(Gravity.CENTER);
+        jc.addView(tv("📖 احفظ مع الحصري", 34, INK, true));
+        TextView js = tv("اختاري الجزء", 18, 0xCC22314D, false);
+        js.setPadding(0, dp(4), 0, dp(26));
+        jc.addView(js);
+        LinearLayout jrow = new LinearLayout(this);
+        jrow.setGravity(Gravity.CENTER);
+        for (int i = 0; i < juzList.length(); i++) {
+            final int ji = i;
+            JSONObject jz = juzList.optJSONObject(i);
+            int color = PALETTE[(i * 2) % PALETTE.length];
+            LinearLayout t = new LinearLayout(this);
+            t.setOrientation(LinearLayout.VERTICAL);
+            t.setGravity(Gravity.CENTER);
+            t.setPadding(dp(30), dp(22), dp(30), dp(22));
+            t.setBackground(round(0xF2FFFFFF, dp(30), color, dp(4)));
+            t.setElevation(dp(8));
+            t.setFocusable(true);
+            t.setClickable(true);
+            TextView num = tv(String.valueOf(jz.optInt("n")), 54, 0xFFFFFFFF, true);
+            GradientDrawable circle = new GradientDrawable();
+            circle.setShape(GradientDrawable.OVAL);
+            circle.setColor(color);
+            num.setBackground(circle);
+            num.setShadowLayer(4, 0, 1, 0x44000000);
+            t.addView(num, new LinearLayout.LayoutParams(dp(110), dp(110)));
+            TextView nm = tv(jz.optString("name"), 28, INK, true);
+            nm.setPadding(0, dp(12), 0, 0);
+            t.addView(nm);
+            t.addView(tv(jz.optJSONArray("surahs").length() + " سورة", 15, 0x9922314D, false));
+            t.setOnClickListener(v -> openJuz(ji));
+            t.setOnFocusChangeListener((v, has) -> v.animate().scaleX(has ? 1.08f : 1f).scaleY(has ? 1.08f : 1f).setDuration(150).start());
+            LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(dp(240), -2);
+            tl.setMargins(dp(20), 0, dp(20), 0);
+            jrow.addView(t, tl);
+            if (i == 0) firstJuz = t;
+        }
+        jc.addView(jrow);
+        juzPicker.addView(jc, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(juzPicker, new FrameLayout.LayoutParams(-1, -1));
 
         // --- reader
         reader = new FrameLayout(this);

@@ -253,7 +253,7 @@ public final class PhotoServer {
             + "<input id=girls type=checkbox style='display:inline;width:auto;margin:0 0 0 8px'>كلهم بنات</label>"
             + "<button id=sv>حفظ</button> <span id=fs></span></fieldset><script>"
             + "const st=document.getElementById('st'),g=document.getElementById('g');"
-            + "let pin=localStorage.getItem('pin')||'';"
+            + "let pin=new URLSearchParams(location.search).get('pin')||localStorage.getItem('pin')||'';localStorage.setItem('pin',pin);"
             + "function q(u){return u+(u.includes('?')?'&':'?')+'pin='+pin}"
             + "async function ask(){pin=prompt('اكتب الرقم السري اللي ظاهر على التليفزيون')||'';localStorage.setItem('pin',pin)}"
             + "async function load(){let r=await fetch(q('/list'));while(r.status==403){await ask();r=await fetch(q('/list'))}"

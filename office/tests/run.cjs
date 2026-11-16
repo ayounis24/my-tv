@@ -53,8 +53,9 @@ async function test(name, fn) {
     await p.context().close();
   });
 
+  const threeInputs = { hdmiInputs: [{ port: 1, name: 'كاميرات المكتب' }, { port: 2, name: 'HDMI 2' }, { port: 3, name: 'HDMI 3' }] };
   await test('قائمة HDMI: اختيار المدخل 3، والعودة للزر، وحالة «تجريبي» بدون فيديو مزيف', async () => {
-    const p = await page(browser);
+    const p = await page(browser, '', threeInputs);
     await key(p, 'ArrowRight', 5); await key(p, 'Enter');
     ok(await p.isVisible('.panel'), 'القائمة لم تُفتح');
     ok((await focused(p)).includes('HDMI 1'), 'التحديد داخل القائمة: ' + await focused(p));
@@ -66,6 +67,14 @@ async function test(name, fn) {
     ok(chip.s === 'demo' && /HDMI 3/.test(chip.t), 'الشارة: ' + JSON.stringify(chip));
     ok(await p.$('.demo-source'), 'بطاقة الوضع التجريبي غير ظاهرة');
     ok(!(await p.$('#viewerLayers video')), 'يوجد عنصر فيديو يوحي ببث HDMI حقيقي');
+    await p.context().close();
+  });
+
+  await test('قائمة HDMI الحقيقية: «كاميرات المكتب» فقط', async () => {
+    const p = await page(browser);
+    await key(p, 'ArrowRight', 5); await key(p, 'Enter');
+    const items = await p.$$eval('.panel .list-item', l => l.map(x => x.getAttribute('aria-label')));
+    ok(items.length === 1 && items[0].startsWith('كاميرات المكتب'), JSON.stringify(items));
     await p.context().close();
   });
 
@@ -81,7 +90,7 @@ async function test(name, fn) {
   });
 
   await test('التكبير لملء الشاشة ثم الاستعادة مع الحفاظ على المصدر', async () => {
-    const p = await page(browser, '', { controlsAutoHideMs: 700 });
+    const p = await page(browser, '', Object.assign({ controlsAutoHideMs: 700 }, threeInputs));
     await key(p, 'ArrowRight', 5); await key(p, 'Enter'); await key(p, 'ArrowDown', 2); await key(p, 'Enter'); // HDMI 3
     await p.evaluate(() => { window.__srcBefore = window.__app.current(); window.__nodeBefore = document.querySelector('.demo-source'); });
     await key(p, 'ArrowLeft', 2);               // زر التكبير
@@ -161,7 +170,7 @@ async function test(name, fn) {
     await p.context().close();
   });
 
-  await test('QR بطاقة الاتصال الحقيقية: تُقرأ وفيها الاسم والأرقام والبريد', async () => {
+  await test('QR الحقيقيان: البروفايل يفتح الرابط، وبطاقة الاتصال فيها الاسم والأرقام والبريد', async () => {
     const p = await page(browser);
     const img = await p.$eval('#qrContact canvas', c => {
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height);
@@ -173,7 +182,12 @@ async function test(name, fn) {
     ['FN;CHARSET=UTF-8:أحمد يونس', 'N;CHARSET=UTF-8:يونس;أحمد;;;', 'TEL;TYPE=CELL:+966531074973', 'TEL;TYPE=CELL:+966500979795',
      'TEL;TYPE=WORK,VOICE:+966112077978', 'EMAIL;TYPE=INTERNET:a.younis@rumaar.com', 'URL:https://rumaar.com']
       .forEach(x => ok(v.includes(x), 'ناقص: ' + x + '\n' + v));
-    ok(!(await p.$('#qrProfile canvas')), 'ظهر QR للبروفايل رغم عدم وجود الرابط');
+    const pimg = await p.$eval('#qrProfile canvas', c => {
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+      return { w: c.width, h: c.height, data: Array.from(d.data) };
+    });
+    const pr = jsQR(Uint8ClampedArray.from(pimg.data), pimg.w, pimg.h);
+    ok(pr && pr.data === 'https://drive.google.com/file/d/1lTDY7Mb7PeMrE8pPR9W1S3IgD8TkVvvC/view?usp=drive_link', 'رابط البروفايل المقروء: ' + (pr && pr.data));
     await p.context().close();
   });
 

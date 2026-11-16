@@ -41,7 +41,7 @@ window.RUMAAR_CONFIG = {
   weekStart: 0,          // 0 = الأحد أول الأسبوع، 6 = السبت
 
   // رابط بروفايل الشركة (يُولَّد له QR). اتركه فارغًا حتى يتوفر الرابط الصحيح.
-  profileUrl: '',
+  profileUrl: 'https://drive.google.com/file/d/1lTDY7Mb7PeMrE8pPR9W1S3IgD8TkVvvC/view?usp=drive_link',
 
   // بطاقة الاتصال (vCard). يلزم الاسم + هاتف أو بريد على الأقل لتوليد QR.
   contact: {
@@ -58,9 +58,8 @@ window.RUMAAR_CONFIG = {
 
   // مداخل HDMI — الأسماء قابلة للتخصيص (مثل: «كاميرات المكتب»، «لابتوب الاجتماعات»)
   hdmiInputs: [
-    { port: 1, name: 'كاميرات المكتب' },
-    { port: 2, name: 'HDMI 2' },
-    { port: 3, name: 'HDMI 3' }
+    { port: 1, name: 'كاميرات المكتب' }
+    // مداخل أخرى عند الحاجة: { port: 2, name: '...' }, { port: 3, name: '...' }
   ],
 
   // مشاركة شاشة اللابتوب.
